@@ -1,0 +1,64 @@
+name: bloodlink
+description: "BloodLink — a blood donation request & donor matching app."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.6
+
+  # State management
+  provider: ^6.1.2
+
+  # Networking
+  dio: ^5.4.3+1
+
+  # Local storage
+  shared_preferences: ^2.2.3
+
+  # Realtime
+  socket_io_client: ^2.0.3+1
+
+  # Auth
+  google_sign_in: ^6.2.1
+
+  # Utils
+  intl: ^0.19.0
+
+  # Geolocation (nearby donor detection)
+  geolocator: ^13.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  # Generates the native (pre-Flutter-engine) launch screen for Android/iOS
+  # so the stock Flutter logo never shows on app open.
+  flutter_native_splash: ^2.4.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/data/locations.json
+    - assets/images/splash_logo.png
+
+# Config consumed by `dart run flutter_native_splash:create` (see
+# NATIVE_SPLASH_SETUP.md for the one-time command to run after
+# `flutter pub get`). This generates the actual native launch_background /
+# LaunchScreen files under android/ and ios/, which only exist once this
+# lib/ + pubspec.yaml is dropped into a full `flutter create`-scaffolded
+# project.
+flutter_native_splash:
+  color: "#E53935"
+  image: assets/images/splash_logo.png
+  android_12:
+    color: "#E53935"
+    image: assets/images/splash_logo.png
+  android: true
+  ios: true
+  web: false
