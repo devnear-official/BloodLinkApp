@@ -35,11 +35,11 @@ void main() {
     },
   );
 
-  runApp(const BloodLinkApp());
+  runApp(const MyApp());
 }
 
-class BloodLinkApp extends StatelessWidget {
-  const BloodLinkApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +123,11 @@ class BloodLinkApp extends StatelessWidget {
     );
   }
 }
-// ok
+
+class BloodLinkApp extends MyApp {
+  const BloodLinkApp({super.key});
+}
+
 /// Root widget that decides between the login flow and the authenticated
 /// home shell based on [AuthProvider.status], and shows a splash while the
 /// persisted session is still being restored.

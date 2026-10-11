@@ -1,15 +1,16 @@
 /// Central place for every backend URL used by the app.
 ///
-/// The backend is a Render free-tier deployment, so the very first request
-/// after a period of inactivity can take 30–50s while the instance wakes up.
-/// [ApiClient] is configured with generous timeouts to tolerate this, and
-/// [SocketService] is configured to keep retrying its handshake rather than
-/// giving up after one failed attempt.
+/// Set `API_BASE_URL` with `--dart-define` when the app and backend do not
+/// share a localhost network namespace (for example, Android emulators use
+/// `http://10.0.2.2:3000`).
 class ApiEndpoints {
   ApiEndpoints._();
 
-  /// Root of the deployed backend (no trailing slash).
-  static const String baseUrl = 'https://bloodlink-backend-pcro.onrender.com';
+  /// Root of the local backend (no trailing slash).
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:3000',
+  );
 
   /// All REST routes live under `/api`.
   static const String apiBase = '$baseUrl/api';
@@ -60,6 +61,7 @@ class ApiEndpoints {
   static const String testPush = '$apiBase/notifications/test-push';
   static const String subscribePush = '$apiBase/notifications/subscribe';
   static const String notifications = '$apiBase/notifications';
+  static const String notificationsReadAll = '$apiBase/notifications/read-all';
   static String notificationRead(String id) =>
       '$apiBase/notifications/$id/read';
 
@@ -72,4 +74,5 @@ class ApiEndpoints {
   static const String eventNotificationNew = 'notification:new';
   static const String eventDirectRequestNew = 'direct_request:new';
   static const String eventDirectRequestUpdated = 'direct_request:updated';
+  static const String eventDirectRequestCancelled = 'direct_request:cancelled';
 }

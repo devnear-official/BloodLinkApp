@@ -12,7 +12,7 @@ class DirectRequestService {
   Future<List<DirectRequestModel>> getDirectRequests(String box) async {
     final response = await _dio.get(
       ApiEndpoints.directRequests,
-      queryParameters: {'box': box},
+      queryParameters: {'type': box},
     );
     _ensureOk(response);
     final list = response.data as List<dynamic>;

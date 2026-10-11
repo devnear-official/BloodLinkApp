@@ -14,6 +14,8 @@ class StorageService {
 
   static const String _tokenKey = 'bloodlink_auth_token';
   static const String _userKey = 'bloodlink_cached_user';
+  static const String _onboardingKey = 'bloodlink_onboarding_complete';
+  static const String _darkModeKey = 'bloodlink_dark_mode';
 
   SharedPreferences? _prefs;
 
@@ -51,4 +53,16 @@ class StorageService {
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
   }
+
+  Future<bool> hasCompletedOnboarding() async =>
+      (await _prefsInstance).getBool(_onboardingKey) ?? false;
+
+  Future<void> completeOnboarding() async =>
+      (await _prefsInstance).setBool(_onboardingKey, true);
+
+  Future<bool> getDarkMode() async =>
+      (await _prefsInstance).getBool(_darkModeKey) ?? false;
+
+  Future<void> saveDarkMode(bool enabled) async =>
+      (await _prefsInstance).setBool(_darkModeKey, enabled);
 }

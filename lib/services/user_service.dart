@@ -35,7 +35,7 @@ class UserService {
         if (division != null && division.isNotEmpty) 'division': division,
         if (district != null && district.isNotEmpty) 'district': district,
         if (subDistrict != null && subDistrict.isNotEmpty)
-          'subDistrict': subDistrict,
+          'upazila': subDistrict,
         if (bloodGroup != null && bloodGroup.isNotEmpty)
           'bloodGroup': bloodGroup,
       },
@@ -58,7 +58,7 @@ class UserService {
   Future<void> updateUserRole(String userId, String role) async {
     final response = await _dio.put(
       ApiEndpoints.userRole(userId),
-      data: {'role': role},
+      data: {'role': role.toLowerCase() == 'admin' ? 'Admin' : 'User'},
     );
     _ensureOk(response);
   }

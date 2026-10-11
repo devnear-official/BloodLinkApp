@@ -20,17 +20,48 @@ class NotificationModel {
   final DateTime? createdAt;
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
+    final rawType = (json['type'] ?? '').toString();
+    final type = switch (rawType.toLowerCase()) {
+      'newrequest' || 'requestcancelled' => 'request',
+      'donorresponse' || 'responsereviewed' => 'response',
+      'directrequest' || 'statusupdate' => 'direct_request',
+      _ => rawType.toLowerCase(),
+    };
+    final link = json['link']?.toString() ?? '';
+    final requestId = json['relatedRequestId'] ?? json['requestId'];
+    final highlightedRequest =
+        RegExp(r'[?&]highlight=([^&]+)').firstMatch(link)?.group(1);
+
     return NotificationModel(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
-      title: json['title'] ?? '',
+      title: (json['title'] ?? _titleFor(rawType)).toString(),
       message: json['message'] ?? '',
-      type: json['type'] ?? '',
-      isRead: json['isRead'] ?? false,
-      relatedRequestId: json['relatedRequestId']?.toString(),
+      type: type,
+      isRead: (json['isRead'] ?? json['read']) == true,
+      relatedRequestId: (requestId ?? highlightedRequest)?.toString(),
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,
     );
+  }
+
+  static String _titleFor(String type) {
+    switch (type.toLowerCase()) {
+      case 'newrequest':
+        return 'New blood request';
+      case 'donorresponse':
+        return 'A donor responded';
+      case 'responsereviewed':
+        return 'Your offer was reviewed';
+      case 'directrequest':
+        return 'New direct request';
+      case 'statusupdate':
+        return 'Direct request updated';
+      case 'requestcancelled':
+        return 'Blood request cancelled';
+      default:
+        return 'BloodLink notification';
+    }
   }
 
   NotificationModel copyWith({bool? isRead}) {

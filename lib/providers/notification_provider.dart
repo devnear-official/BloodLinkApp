@@ -79,7 +79,7 @@ class NotificationProvider extends ChangeNotifier {
         notifications.map((n) => n.copyWith(isRead: true)).toList();
     notifyListeners();
     try {
-      await _service.markAllAsRead(unreadIds);
+      await _service.markAllAsRead();
     } catch (e) {
       notifications = previous;
       appError = mapError(e);

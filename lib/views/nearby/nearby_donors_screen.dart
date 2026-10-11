@@ -10,6 +10,7 @@ import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/user_service.dart';
 import '../direct_request/send_direct_request_screen.dart';
+import '../shared/location_selector.dart';
 import '../donor/widgets/donor_card.dart';
 
 /// "Find Nearby" bottom-nav tab: automatically detects the person's
@@ -38,6 +39,9 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
   List<UserModel> _donors = [];
   LocationPermissionException? _permissionError;
   AppError? _appError;
+  bool _needsManualArea = false;
+  String? _manualDivision;
+  String? _manualDistrict;
 
   @override
   void initState() {
@@ -53,25 +57,25 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
     });
 
     try {
-      final location = await GeolocationService.instance.detectCurrentLocation();
+      final location =
+          await GeolocationService.instance.detectCurrentLocation();
       if (!mounted) return;
 
       if (!location.matchedAnything) {
         setState(() {
           _location = location;
-          _status = _NearbyStatus.error;
-          _appError = const AppError(
-            message:
-                "Found your location, but couldn't match it to a known area. "
-                "Try the Donors tab and filter manually instead.",
-            type: AppErrorType.unknown,
-          );
+          _needsManualArea = true;
+          _manualDivision = null;
+          _manualDistrict = null;
+          _status = _NearbyStatus.loadingDonors;
         });
+        await _loadDonors(location);
         return;
       }
 
       setState(() {
         _location = location;
+        _needsManualArea = false;
         _status = _NearbyStatus.loadingDonors;
       });
       await _loadDonors(location);
@@ -93,10 +97,11 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
   Future<void> _loadDonors(DetectedLocation location) async {
     try {
       final currentUserId = context.read<AuthProvider>().currentUser?.id;
+      final district = _needsManualArea ? _manualDistrict : location.district;
       final users = await _userService.getUsers(
-        division: location.division,
-        district: location.district,
-        subDistrict: location.subDistrict,
+        division: _needsManualArea ? _manualDivision : location.division,
+        district: district,
+        subDistrict: _needsManualArea ? null : location.subDistrict,
       );
       if (!mounted) return;
       setState(() {
@@ -105,9 +110,18 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
           if (u.id == currentUserId) return false;
           // Enforce client-side too, same reasoning as everywhere else in
           // the app — some backends ignore query params they don't know.
-          if (location.district != null &&
+          final filterDistrict =
+              _needsManualArea ? _manualDistrict : location.district;
+          final filterDivision =
+              _needsManualArea ? _manualDivision : location.division;
+          if (filterDistrict != null &&
               (u.district ?? '').trim().toLowerCase() !=
-                  location.district!.trim().toLowerCase()) {
+                  filterDistrict.trim().toLowerCase()) {
+            return false;
+          }
+          if (filterDivision != null &&
+              (u.division ?? '').trim().toLowerCase() !=
+                  filterDivision.trim().toLowerCase()) {
             return false;
           }
           return true;
@@ -160,6 +174,21 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
         return ListView(
           children: [
             _locationBanner(),
+            if (_needsManualArea) ...[
+              _manualAreaPicker(),
+              if (_manualDistrict == null && _manualDivision == null)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 4, 24, 0),
+                  child: Text(
+                    'Showing available donors across all areas. Choose your area to narrow the results.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
             const SizedBox(height: 60),
             const Center(child: CircularProgressIndicator()),
           ],
@@ -177,7 +206,7 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight.withOpacity(0.5),
+                      color: AppColors.primaryLight.withValues(alpha: 0.5),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.location_off_outlined,
@@ -190,10 +219,13 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _permissionError?.message ?? 'Location permission is required.',
+                    _permissionError?.message ??
+                        'Location permission is required.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        height: 1.4),
                   ),
                   const SizedBox(height: 20),
                   Row(
@@ -233,6 +265,7 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
           return ListView(
             children: [
               _locationBanner(),
+              if (_needsManualArea) _manualAreaPicker(),
               const SizedBox(height: 60),
               const Icon(Icons.people_outline,
                   size: 56, color: AppColors.textSecondary),
@@ -244,18 +277,20 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
               const Center(
                 child: Text(
                   'Try the Donors tab to search a wider area',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style:
+                      TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
               ),
             ],
           );
         }
         return ListView.builder(
-          padding: const EdgeInsets.only(bottom: 90, top: 4),
-          itemCount: _donors.length + 1,
+          padding: const EdgeInsets.only(bottom: 90),
+          itemCount: _donors.length + (_needsManualArea ? 2 : 1),
           itemBuilder: (context, index) {
             if (index == 0) return _locationBanner();
-            final donor = _donors[index - 1];
+            if (_needsManualArea && index == 1) return _manualAreaPicker();
+            final donor = _donors[index - (_needsManualArea ? 2 : 1)];
             return DonorCard(
               donor: donor,
               onSendRequest: () => _openSendRequest(donor),
@@ -277,7 +312,7 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.accent.withOpacity(0.08),
+        color: AppColors.accent.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -286,7 +321,11 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              label.isEmpty ? 'Your current location' : 'Near $label',
+              _needsManualArea
+                  ? 'Location needs confirmation · ${_location?.displayName ?? 'GPS detected'}'
+                  : label.isEmpty
+                      ? 'Your current location'
+                      : 'Near $label',
               style: const TextStyle(
                 fontSize: 12,
                 color: AppColors.accent,
@@ -298,7 +337,58 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
           ),
           InkWell(
             onTap: _detectAndLoad,
-            child: const Icon(Icons.refresh_rounded, size: 18, color: AppColors.accent),
+            child: const Icon(Icons.refresh_rounded,
+                size: 18, color: AppColors.accent),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _manualAreaPicker() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Choose your area',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'We found your GPS position but could not identify its district. Select your area to narrow nearby donors.',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          LocationSelector(
+            division: _manualDivision,
+            district: _manualDistrict,
+            showSubDistrict: false,
+            allowClear: true,
+            onDivisionChanged: (value) {
+              setState(() {
+                _manualDivision = value;
+                _manualDistrict = null;
+                _status = _NearbyStatus.loadingDonors;
+              });
+              _loadDonors(_location!);
+            },
+            onDistrictChanged: (value) {
+              setState(() {
+                _manualDistrict = value;
+                _status = _NearbyStatus.loadingDonors;
+              });
+              _loadDonors(_location!);
+            },
           ),
         ],
       ),

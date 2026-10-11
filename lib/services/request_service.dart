@@ -16,7 +16,6 @@ class RequestService {
     final response = await _dio.get(
       ApiEndpoints.requests,
       queryParameters: {
-        if (division != null && division.isNotEmpty) 'division': division,
         if (district != null && district.isNotEmpty) 'district': district,
         if (bloodGroup != null && bloodGroup.isNotEmpty)
           'bloodGroup': bloodGroup,
@@ -66,7 +65,9 @@ class RequestService {
   }) async {
     final response = await _dio.put(
       ApiEndpoints.requestStatus(requestId),
-      data: {'status': status},
+      data: {
+        'status': status == 'Completed' ? 'Fulfilled' : status,
+      },
     );
     _ensureOk(response);
     return BloodRequestModel.fromJson(response.data as Map<String, dynamic>);

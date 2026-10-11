@@ -36,19 +36,30 @@ class DirectRequestProvider extends ChangeNotifier {
     SocketService.instance.on(ApiEndpoints.eventDirectRequestUpdated, (data) {
       if (data is Map<String, dynamic>) {
         final updated = DirectRequestModel.fromJson(data);
-        received = received
-            .map((r) => r.id == updated.id ? updated : r)
-            .toList();
+        received =
+            received.map((r) => r.id == updated.id ? updated : r).toList();
         sent = sent.map((r) => r.id == updated.id ? updated : r).toList();
         notifyListeners();
       }
     });
+
+    SocketService.instance.on(
+      ApiEndpoints.eventDirectRequestCancelled,
+      (data) {
+        final id = data?.toString();
+        if (id == null) return;
+        received = received.where((request) => request.id != id).toList();
+        sent = sent.where((request) => request.id != id).toList();
+        notifyListeners();
+      },
+    );
   }
 
   @override
   void dispose() {
     SocketService.instance.off(ApiEndpoints.eventDirectRequestNew);
     SocketService.instance.off(ApiEndpoints.eventDirectRequestUpdated);
+    SocketService.instance.off(ApiEndpoints.eventDirectRequestCancelled);
     super.dispose();
   }
 

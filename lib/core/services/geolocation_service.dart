@@ -132,7 +132,7 @@ class GeolocationService {
         'format': 'json',
         'lat': lat,
         'lon': lon,
-        'zoom': 10,
+        'zoom': 12,
         'addressdetails': 1,
       },
     );
@@ -147,13 +147,18 @@ class GeolocationService {
     final divisionCandidates = [
       address['state'],
       address['region'],
+      address['province'],
+      address['state_district'],
     ].map((e) => e?.toString());
 
     final districtCandidates = [
+      address['city_district'],
       address['state_district'],
       address['county'],
-      address['city'],
       address['district'],
+      address['city'],
+      address['municipality'],
+      address['town'],
     ].map((e) => e?.toString());
 
     final subDistrictCandidates = [
@@ -162,17 +167,26 @@ class GeolocationService {
       address['town'],
       address['suburb'],
       address['village'],
+      address['neighbourhood'],
+      address['quarter'],
+      address['borough'],
     ].map((e) => e?.toString());
 
     final location = LocationService.instance;
     final division = location.matchDivision(divisionCandidates);
-    final district = location.matchDistrict(
+    var district = location.matchDistrict(
       districtCandidates,
       divisionHint: division,
     );
-    final subDistrict = district != null
-        ? location.matchSubDistrict(subDistrictCandidates, district)
-        : null;
+    final subDistrict = location.matchSubDistrict(
+      subDistrictCandidates,
+      district,
+    );
+    final districtFromSubDistrict = location.districtForSubDistrict(
+      subDistrict,
+      divisionHint: division,
+    );
+    if (districtFromSubDistrict != null) district = districtFromSubDistrict;
 
     return DetectedLocation(
       latitude: lat,

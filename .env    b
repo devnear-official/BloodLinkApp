@@ -1,0 +1,9 @@
+PORT=3000
+
+JWT_SECRET=thisiskey
+
+
+VITE_ADMIN_EMAIL="admin@bloodlink.com"
+VITE_ADMIN_PASS="admin123"
+MONGODB_URI="mongodb+srv://muhaiminulofficial_db_user:zdOJulp1MjWIe1Y4@cluster0.pjvoqti.mongodb.net/?appName=Cluster0"
+# MONGODB_URI="mongodb://localhost:27017/muhai_bloodllink"

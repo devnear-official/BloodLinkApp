@@ -8,8 +8,7 @@ import 'auth_interceptor.dart';
 /// Dio — this keeps timeouts, headers, and interceptors consistent
 /// app-wide.
 ///
-/// Timeouts are intentionally generous: the backend is a Render free-tier
-/// deployment that can take 30–50s to wake up after being idle.
+/// Timeouts allow the local backend time to connect to its database.
 class ApiClient {
   ApiClient._internal();
   static final ApiClient instance = ApiClient._internal();
@@ -36,8 +35,7 @@ class ApiClient {
     return Dio(
       BaseOptions(
         baseUrl: ApiEndpoints.apiBase,
-        // Render free-tier cold starts can take 30-50s; give the first
-        // request plenty of room before Dio gives up.
+        // Leave enough time for the backend and database to establish a connection.
         connectTimeout: const Duration(seconds: 60),
         receiveTimeout: const Duration(seconds: 60),
         sendTimeout: const Duration(seconds: 60),

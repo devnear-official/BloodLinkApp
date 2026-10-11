@@ -62,9 +62,12 @@ class BloodRequestModel {
   final String? message;
   final UserModel? createdBy;
   final UserModel? acceptedBy;
-  final String status; // Pending | Accepted | Completed | Cancelled
+  final String status; // Active | Pending | Accepted | Completed | Cancelled
   final String priority; // Low | Medium | High | Critical
   final List<DonorResponse> responses;
+
+  bool get isOpen =>
+      status.toLowerCase() == 'active' || status.toLowerCase() == 'pending';
 
   static UserModel? _parseUserRef(dynamic value) {
     if (value == null) return null;
@@ -81,7 +84,7 @@ class BloodRequestModel {
       contactNumber: json['contactNumber'] ?? '',
       division: json['division'] ?? '',
       district: json['district'] ?? '',
-      subDistrict: json['subDistrict'],
+      subDistrict: (json['upazila'] ?? json['subDistrict'])?.toString(),
       requiredDate: json['requiredDate'] != null
           ? DateTime.tryParse(json['requiredDate'].toString())
           : null,
@@ -90,7 +93,10 @@ class BloodRequestModel {
       acceptedBy: _parseUserRef(json['acceptedBy']),
       status: json['status'] ?? 'Pending',
       priority: json['priority'] ?? 'Medium',
-      responses: (json['responses'] as List<dynamic>? ?? [])
+      responses:
+          (json['donorResponses'] as List<dynamic>? ??
+                  json['responses'] as List<dynamic>? ??
+                  [])
           .map((e) => DonorResponse.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
@@ -105,7 +111,7 @@ class BloodRequestModel {
       'division': division,
       'district': district,
       if (subDistrict != null && subDistrict!.isNotEmpty)
-        'subDistrict': subDistrict,
+        'upazila': subDistrict,
       if (requiredDate != null)
         'requiredDate': requiredDate!.toIso8601String(),
       if (message != null) 'message': message,

@@ -68,7 +68,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
     final canRespond = currentUser != null &&
         !isOwner &&
         !alreadyResponded &&
-        request.status == 'Pending' &&
+        request.isOpen &&
         currentUser.isEligibleToDonate;
 
     return Scaffold(
@@ -147,7 +147,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
             if (currentUser != null &&
                 !isOwner &&
                 !currentUser.isEligibleToDonate &&
-                request.status == 'Pending')
+                request.isOpen)
               _InfoBanner(
                 icon: Icons.access_time,
                 text: currentUser.lastDonation == null
@@ -157,7 +157,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
               ),
             const SizedBox(height: 24),
             if (isOwner &&
-                request.status != 'Pending' &&
+                !request.isOpen &&
                 request.responses.any((r) => r.status == 'Accepted'))
               const _InfoBanner(
                 icon: Icons.lock_outline,
@@ -189,7 +189,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
                 (response) => _ResponseTile(
                   response: response,
                   isOwner: isOwner,
-                  requestLocked: request.status != 'Pending',
+                  requestLocked: !request.isOpen,
                   onAccept: () => context.read<RequestProvider>().acceptDonorResponse(
                         requestId: request.id,
                         donorId: response.donor.id,

@@ -246,13 +246,15 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
     }
 
     final statusCounts = <String, int>{
+      'Active': 0,
       'Pending': 0,
       'Accepted': 0,
       'Completed': 0,
       'Cancelled': 0,
     };
     for (final r in _requests) {
-      statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
+      final status = r.status.toLowerCase() == 'active' ? 'Active' : r.status;
+      statusCounts[status] = (statusCounts[status] ?? 0) + 1;
     }
 
     return RefreshIndicator(

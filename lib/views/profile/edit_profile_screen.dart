@@ -67,7 +67,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       'bloodGroup': _bloodGroup,
       'division': _division,
       'district': _district,
-      'subDistrict': _subDistrict,
+      'upazila': _subDistrict,
       'status': _status,
       if (_lastDonation != null)
         'lastDonation': _lastDonation!.toIso8601String(),

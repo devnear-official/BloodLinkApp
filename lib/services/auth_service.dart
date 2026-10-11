@@ -37,7 +37,7 @@ class AuthService {
         if (bloodGroup != null) 'bloodGroup': bloodGroup,
         if (division != null) 'division': division,
         if (district != null) 'district': district,
-        if (subDistrict != null) 'subDistrict': subDistrict,
+        if (subDistrict != null) 'upazila': subDistrict,
       },
     );
     return _resultFromResponse(response);

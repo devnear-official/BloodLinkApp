@@ -22,17 +22,18 @@ class NotificationService {
     _ensureOk(response);
   }
 
-  Future<void> markAllAsRead(List<String> ids) async {
-    // Backend only exposes a per-notification endpoint, so mark-all fans
-    // out concurrently rather than blocking on each one sequentially.
-    await Future.wait(ids.map(markAsRead));
+  Future<void> markAllAsRead() async {
+    final response = await _dio.put(ApiEndpoints.notificationsReadAll);
+    _ensureOk(response);
   }
 
   Future<String?> getVapidPublicKey() async {
     final response = await _dio.get(ApiEndpoints.vapidPublicKey);
     _ensureOk(response);
     final data = response.data;
-    if (data is Map<String, dynamic>) return data['key'] as String?;
+    if (data is Map<String, dynamic>) {
+      return (data['publicKey'] ?? data['key']) as String?;
+    }
     return data?.toString();
   }
 

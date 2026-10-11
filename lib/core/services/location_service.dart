@@ -84,27 +84,57 @@ class LocationService {
   // boundaries rarely line up exactly with a third-party gazetteer.
   // ---------------------------------------------------------------------
 
-  static String _normalize(String value) =>
-      value.toLowerCase().trim().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  static String _normalize(String value) {
+    var normalized = value.toLowerCase().trim();
+    const aliases = {
+      'cumilla': 'comilla',
+      'chittagong': 'chattogram',
+      'barisal': 'barishal',
+      'jessore': 'jashore',
+      'bogra': 'bogura',
+    };
+    for (final alias in aliases.entries) {
+      normalized = normalized.replaceAll(alias.key, alias.value);
+    }
+    return normalized.replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  String? _matchName(Iterable<String?> candidates, Iterable<String> names) {
+    final candidateNames = candidates
+        .whereType<String>()
+        .map((candidate) => _normalize(candidate))
+        .where((candidate) => candidate.isNotEmpty)
+        .toList();
+    final knownNames = names.toList();
+
+    for (final candidate in candidateNames) {
+      for (final name in knownNames) {
+        if (candidate == _normalize(name)) return name;
+      }
+    }
+
+    for (final candidate in candidateNames) {
+      for (final name in knownNames) {
+        final normalizedName = _normalize(name);
+        if (candidate.length >= 4 &&
+            (candidate.contains(normalizedName) ||
+                normalizedName.contains(candidate))) {
+          return name;
+        }
+      }
+    }
+    return null;
+  }
 
   /// Returns the known division name that best matches [raw], or null if
   /// nothing looks close enough. Tries every candidate string in [raw] in
   /// order (callers pass several possible Nominatim fields since which
   /// field holds the division varies by area).
   String? matchDivision(Iterable<String?> candidates) {
-    for (final candidate in candidates) {
-      if (candidate == null || candidate.isEmpty) continue;
-      final normalizedCandidate = _normalize(candidate);
-      for (final division in cachedDivisions) {
-        final normalizedName = _normalize(division.division);
-        if (normalizedCandidate == normalizedName ||
-            normalizedCandidate.contains(normalizedName) ||
-            normalizedName.contains(normalizedCandidate)) {
-          return division.division;
-        }
-      }
-    }
-    return null;
+    return _matchName(
+      candidates,
+      cachedDivisions.map((division) => division.division),
+    );
   }
 
   /// Returns the known district name that best matches [raw], optionally
@@ -113,8 +143,7 @@ class LocationService {
   String? matchDistrict(Iterable<String?> candidates, {String? divisionHint}) {
     final searchSpace = <DistrictModel>[];
     if (divisionHint != null) {
-      final division =
-          cachedDivisions.where((d) => d.division == divisionHint);
+      final division = cachedDivisions.where((d) => d.division == divisionHint);
       if (division.isNotEmpty) searchSpace.addAll(division.first.districts);
     }
     if (searchSpace.isEmpty) {
@@ -123,44 +152,59 @@ class LocationService {
       }
     }
 
-    for (final candidate in candidates) {
-      if (candidate == null || candidate.isEmpty) continue;
-      final normalizedCandidate = _normalize(candidate);
-      for (final district in searchSpace) {
-        final normalizedName = _normalize(district.district);
-        if (normalizedCandidate == normalizedName ||
-            normalizedCandidate.contains(normalizedName) ||
-            normalizedName.contains(normalizedCandidate)) {
-          return district.district;
-        }
-      }
-    }
-    return null;
+    return _matchName(
+      candidates,
+      searchSpace.map((district) => district.district),
+    );
   }
 
   /// Returns the known upazila (sub-district) name that best matches
   /// [raw], restricted to [districtName]'s upazilas.
   String? matchSubDistrict(Iterable<String?> candidates, String? districtName) {
-    if (districtName == null || districtName.isEmpty) return null;
     final upazilas = <String>[];
-    for (final division in cachedDivisions) {
-      final district =
-          division.districts.where((d) => d.district == districtName);
-      if (district.isNotEmpty) {
-        upazilas.addAll(district.first.upazilas);
-        break;
+    if (districtName != null && districtName.isNotEmpty) {
+      for (final division in cachedDivisions) {
+        final district =
+            division.districts.where((d) => d.district == districtName);
+        if (district.isNotEmpty) {
+          upazilas.addAll(district.first.upazilas);
+          break;
+        }
       }
     }
 
-    for (final candidate in candidates) {
-      if (candidate == null || candidate.isEmpty) continue;
-      final normalizedCandidate = _normalize(candidate);
-      for (final upazila in upazilas) {
-        final normalizedName = _normalize(upazila);
-        if (normalizedCandidate == normalizedName ||
-            normalizedCandidate.contains(normalizedName) ||
-            normalizedName.contains(normalizedCandidate)) {
-          return upazila;
+    final districtMatch =
+        upazilas.isEmpty ? null : _matchName(candidates, upazilas);
+    if (districtMatch != null) return districtMatch;
+
+    return _matchName(
+      candidates,
+      cachedDivisions.expand(
+        (division) =>
+            division.districts.expand((district) => district.upazilas),
+      ),
+    );
+  }
+
+  String? districtForSubDistrict(
+    String? subDistrict, {
+    String? divisionHint,
+  }) {
+    if (subDistrict == null || subDistrict.isEmpty) return null;
+    final divisions = cachedDivisions.toList();
+    if (divisionHint != null) {
+      divisions.sort((a, b) {
+        if (a.division == divisionHint) return -1;
+        if (b.division == divisionHint) return 1;
+        return 0;
+      });
+    }
+    for (final division in divisions) {
+      for (final district in division.districts) {
+        if (district.upazilas.any(
+          (upazila) => _normalize(upazila) == _normalize(subDistrict),
+        )) {
+          return district.district;
         }
       }
     }

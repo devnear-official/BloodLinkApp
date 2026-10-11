@@ -51,6 +51,7 @@ class UserModel {
   }
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    final role = (json['role'] ?? 'user').toString().toLowerCase();
     return UserModel(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
       name: json['name'] ?? '',
@@ -59,14 +60,19 @@ class UserModel {
       bloodGroup: json['bloodGroup'],
       division: json['division'],
       district: json['district'],
-      subDistrict: json['subDistrict'],
-      lastDonation: json['lastDonation'] != null
-          ? DateTime.tryParse(json['lastDonation'].toString())
+      subDistrict: (json['upazila'] ?? json['subDistrict'])?.toString(),
+      lastDonation: (json['lastDonation'] ?? json['lastDonationDate']) != null
+          ? DateTime.tryParse(
+              (json['lastDonation'] ?? json['lastDonationDate']).toString(),
+            )
           : null,
-      status: json['status'] ?? 'Available',
-      role: json['role'] ?? 'user',
+      status: (json['status'] ?? (json['isAvailable'] == false
+                  ? 'Unavailable'
+                  : 'Available'))
+              .toString(),
+      role: role == 'admin' ? 'admin' : 'user',
       authProvider: json['authProvider'] ?? 'local',
-      photoUrl: json['photoUrl'],
+      photoUrl: (json['photoUrl'] ?? json['picture'])?.toString(),
     );
   }
 

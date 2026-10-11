@@ -39,18 +39,20 @@ class AppColors {
   static const Color warning = Color(0xFFF59E0B);
 
   static Color statusColor(String status) {
-    switch (status) {
-      case 'Pending':
+    switch (status.toLowerCase()) {
+      case 'pending':
+      case 'active':
         return statusPending;
-      case 'Accepted':
+      case 'accepted':
         return statusAccepted;
-      case 'Completed':
+      case 'completed':
+      case 'fulfilled':
         return statusCompleted;
-      case 'Cancelled':
+      case 'cancelled':
         return statusCancelled;
-      case 'Rejected':
+      case 'rejected':
         return statusRejected;
-      case 'Declined':
+      case 'declined':
         return statusDeclined;
       default:
         return textSecondary;
