@@ -9,7 +9,7 @@ class ApiEndpoints {
   /// Root of the local backend (no trailing slash).
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:3000',
+    defaultValue: 'https://bloodlinkapp.onrender.com/',
   );
 
   /// All REST routes live under `/api`.
