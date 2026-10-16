@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'location_service.dart';
@@ -7,13 +10,18 @@ import 'location_service.dart';
 /// explain to the person (permission denied, services off, etc.) rather
 /// than treating as a generic network failure.
 class LocationPermissionException implements Exception {
-  LocationPermissionException(this.message, {this.canOpenSettings = false});
+  LocationPermissionException(
+    this.message, {
+    this.canOpenSettings = false,
+    this.canOpenLocationSettings = false,
+  });
   final String message;
 
   /// Whether [Geolocator.openAppSettings] is a meaningful next step (i.e.
   /// permission was denied rather than the whole location service being
   /// off at the OS level).
   final bool canOpenSettings;
+  final bool canOpenLocationSettings;
 
   @override
   String toString() => message;
@@ -76,6 +84,9 @@ class GeolocationService {
     ),
   );
 
+  DetectedLocation? _cachedLocation;
+  DateTime? _cachedLocationAt;
+
   /// Requests location permission (if needed), reads the current GPS
   /// position, and reverse-geocodes it via Nominatim. Throws
   /// [LocationPermissionException] for permission/service problems the UI
@@ -84,14 +95,65 @@ class GeolocationService {
   Future<DetectedLocation> detectCurrentLocation() async {
     await _ensurePermission();
 
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.medium,
-        timeLimit: Duration(seconds: 20),
-      ),
-    );
+    late final Position position;
+    // The geolocator web implementation does not support
+    // getLastKnownPosition; browsers provide the current position directly.
+    final lastKnownPosition =
+        kIsWeb ? null : await Geolocator.getLastKnownPosition();
+    if (lastKnownPosition != null &&
+        DateTime.now().difference(lastKnownPosition.timestamp).abs() <=
+            const Duration(minutes: 2)) {
+      position = lastKnownPosition;
+    } else {
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 10),
+          ),
+        );
+      } on TimeoutException {
+        if (lastKnownPosition == null ||
+            DateTime.now().difference(lastKnownPosition.timestamp).abs() >
+                const Duration(minutes: 10)) {
+          throw LocationPermissionException(
+            'Could not get a GPS fix. Move to an open area, check that location is enabled, and try again.',
+            canOpenLocationSettings: true,
+          );
+        }
+        position = lastKnownPosition;
+      }
+    }
 
-    return _reverseGeocode(position.latitude, position.longitude);
+    final cached = _cachedLocation;
+    final cachedAt = _cachedLocationAt;
+    if (cached != null &&
+        cachedAt != null &&
+        DateTime.now().difference(cachedAt) <= const Duration(minutes: 10) &&
+        Geolocator.distanceBetween(
+              position.latitude,
+              position.longitude,
+              cached.latitude,
+              cached.longitude,
+            ) <=
+            250) {
+      return DetectedLocation(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        displayName: cached.displayName,
+        division: cached.division,
+        district: cached.district,
+        subDistrict: cached.subDistrict,
+      );
+    }
+
+    final detected = await _reverseGeocode(
+      position.latitude,
+      position.longitude,
+    );
+    _cachedLocation = detected;
+    _cachedLocationAt = DateTime.now();
+    return detected;
   }
 
   Future<void> _ensurePermission() async {
@@ -99,11 +161,13 @@ class GeolocationService {
     if (!serviceEnabled) {
       throw LocationPermissionException(
         'Location services are turned off. Please enable location/GPS and try again.',
+        canOpenLocationSettings: true,
       );
     }
 
     var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.unableToDetermine) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         throw LocationPermissionException(
@@ -118,15 +182,20 @@ class GeolocationService {
         canOpenSettings: true,
       );
     }
+
+    if (permission == LocationPermission.unableToDetermine) {
+      throw LocationPermissionException(
+        'BloodLink could not determine your location permission. Please try again or choose your area manually.',
+      );
+    }
   }
 
   Future<DetectedLocation> _reverseGeocode(double lat, double lon) async {
     // Make sure the location dataset is loaded before we try to match
     // against it — the caller may not have rendered a LocationSelector
     // yet, which is what normally triggers this load.
-    await LocationService.instance.loadDivisions();
-
-    final response = await _dio.get<Map<String, dynamic>>(
+    final divisionsFuture = LocationService.instance.loadDivisions();
+    final responseFuture = _dio.get<Map<String, dynamic>>(
       'https://nominatim.openstreetmap.org/reverse',
       queryParameters: {
         'format': 'json',
@@ -136,6 +205,11 @@ class GeolocationService {
         'addressdetails': 1,
       },
     );
+    await Future.wait<void>([
+      divisionsFuture.then<void>((_) {}),
+      responseFuture.then<void>((_) {}),
+    ]);
+    final response = await responseFuture;
 
     final data = response.data ?? const {};
     final address = (data['address'] as Map<String, dynamic>?) ?? const {};

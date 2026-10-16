@@ -41,7 +41,7 @@ export const sendWebPush = async (userId: string, title: string, message: string
   
   try {
     const user = await User.findById(userId);
-    if (!user || !user.pushSubscriptions || user.pushSubscriptions.length === 0) return;
+    if (!user || !user.webPushSubscriptions || user.webPushSubscriptions.length === 0) return;
     
     const payload = JSON.stringify({
       title,
@@ -49,7 +49,7 @@ export const sendWebPush = async (userId: string, title: string, message: string
       link
     });
     
-    const subscriptions = user.pushSubscriptions;
+    const subscriptions = user.webPushSubscriptions;
     let staleCount = 0;
     
     for (let i = 0; i < subscriptions.length; i++) {
@@ -68,7 +68,7 @@ export const sendWebPush = async (userId: string, title: string, message: string
     }
     
     if (staleCount > 0) {
-        user.pushSubscriptions = subscriptions.filter(s => s !== null);
+        user.webPushSubscriptions = subscriptions.filter(s => s !== null);
         await user.save();
     }
     
@@ -89,10 +89,10 @@ export const broadcastWebPush = async (excludeUserId: string | null, title: stri
     let totalSent = 0;
     
     for (const user of users) {
-        if (!user.pushSubscriptions || user.pushSubscriptions.length === 0) continue;
+        if (!user.webPushSubscriptions || user.webPushSubscriptions.length === 0) continue;
         
         let shouldSave = false;
-        const subs = user.pushSubscriptions;
+        const subs = user.webPushSubscriptions;
         
         for (let i = 0; i < subs.length; i++) {
             if (!subs[i]) continue;
@@ -108,7 +108,7 @@ export const broadcastWebPush = async (excludeUserId: string | null, title: stri
         }
         
         if (shouldSave) {
-            user.pushSubscriptions = subs.filter(s => s !== null);
+            user.webPushSubscriptions = subs.filter(s => s !== null);
             await user.save();
         }
     }

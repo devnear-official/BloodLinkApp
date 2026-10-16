@@ -7,6 +7,7 @@ import '../../admin/admin_users_screen.dart';
 import '../../auth/login_screen.dart';
 import '../../notification/notifications_screen.dart';
 import '../../profile/profile_screen.dart';
+import '../../settings/settings_screen.dart';
 
 /// Left-side navigation drawer for the authenticated shell. Shows the
 /// current user at the top, quick links to each bottom-nav destination
@@ -41,8 +42,8 @@ class AppDrawer extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child:
-                const Text('Sign Out', style: TextStyle(color: AppColors.error)),
+            child: const Text('Sign Out',
+                style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -61,9 +62,10 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().currentUser;
+    final colors = Theme.of(context).colorScheme;
 
     return Drawer(
-      backgroundColor: AppColors.surface,
+      backgroundColor: colors.surface,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -186,7 +188,8 @@ class AppDrawer extends StatelessWidget {
               onTap: () {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen()),
                 );
               },
             ),
@@ -214,6 +217,17 @@ class AppDrawer extends StatelessWidget {
                   );
                 },
               ),
+            _DrawerTile(
+              icon: Icons.settings_outlined,
+              label: 'Settings',
+              selected: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+            ),
             const Spacer(),
             const Divider(height: 1),
             _DrawerTile(
@@ -251,16 +265,17 @@ class _DrawerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return ListTile(
       selected: selected,
-      selectedTileColor: AppColors.primaryLight.withOpacity(0.4),
+      selectedTileColor: colors.primaryContainer,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-      leading: Icon(icon, color: iconColor ?? AppColors.textSecondary),
+      leading: Icon(icon, color: iconColor ?? colors.onSurfaceVariant),
       title: Text(
         label,
         style: TextStyle(
-          color: textColor ?? AppColors.textPrimary,
+          color: textColor ?? colors.onSurface,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
         ),
       ),

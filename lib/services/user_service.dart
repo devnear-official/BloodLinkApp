@@ -1,8 +1,10 @@
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../core/constants/api_endpoints.dart';
 import '../core/network/api_client.dart';
 import '../models/user_model.dart';
+import '../models/page_result.dart';
 
 /// Talks to the `/api/users/*` routes: profile fetch/update, donor search
 /// listing, and admin user-management actions.
@@ -21,6 +23,22 @@ class UserService {
     return UserModel.fromJson(response.data as Map<String, dynamic>);
   }
 
+  Future<UserModel> uploadProfilePhoto(XFile photo) async {
+    final bytes = await photo.readAsBytes();
+    final response = await _dio.post(
+      ApiEndpoints.myProfilePhoto,
+      data: FormData.fromMap({
+        'photo': MultipartFile.fromBytes(
+          bytes,
+          filename: photo.name,
+          contentType: DioMediaType.parse(photo.mimeType ?? 'image/jpeg'),
+        ),
+      }),
+    );
+    _ensureOk(response);
+    return UserModel.fromJson(response.data as Map<String, dynamic>);
+  }
+
   /// Fetches all users. Used both for donor search (filtered client-side
   /// or via query params) and the admin panel.
   Future<List<UserModel>> getUsers({
@@ -28,6 +46,7 @@ class UserService {
     String? district,
     String? subDistrict,
     String? bloodGroup,
+    bool availableOnly = false,
   }) async {
     final response = await _dio.get(
       ApiEndpoints.users,
@@ -38,6 +57,7 @@ class UserService {
           'upazila': subDistrict,
         if (bloodGroup != null && bloodGroup.isNotEmpty)
           'bloodGroup': bloodGroup,
+        if (availableOnly) 'isAvailable': 'true',
       },
     );
     _ensureOk(response);
@@ -45,6 +65,57 @@ class UserService {
     return list
         .map((e) => UserModel.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<List<UserModel>> getNearbyUsers({
+    required double latitude,
+    required double longitude,
+    required double radiusKm,
+    int limit = 50,
+  }) async {
+    final response = await _dio.get(
+      ApiEndpoints.nearbyUsers,
+      queryParameters: {
+        'latitude': latitude,
+        'longitude': longitude,
+        'radiusKm': radiusKm,
+        'limit': limit,
+      },
+    );
+    _ensureOk(response);
+    final list = response.data as List<dynamic>;
+    return list
+        .map((item) => UserModel.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<PageResult<UserModel>> getDonorPage({
+    required int page,
+    int limit = 20,
+    String? division,
+    String? district,
+    String? subDistrict,
+    String? bloodGroup,
+  }) async {
+    final response = await _dio.get(
+      ApiEndpoints.users,
+      queryParameters: {
+        'page': page,
+        'limit': limit,
+        'isAvailable': 'true',
+        if (division != null && division.isNotEmpty) 'division': division,
+        if (district != null && district.isNotEmpty) 'district': district,
+        if (subDistrict != null && subDistrict.isNotEmpty)
+          'upazila': subDistrict,
+        if (bloodGroup != null && bloodGroup.isNotEmpty)
+          'bloodGroup': bloodGroup,
+      },
+    );
+    _ensureOk(response);
+    return PageResult<UserModel>.fromJson(
+      response.data as Map<String, dynamic>,
+      UserModel.fromJson,
+    );
   }
 
   Future<void> updateUserStatus(String userId, String status) async {

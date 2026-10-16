@@ -19,12 +19,17 @@ class RequestProvider extends ChangeNotifier {
 
   List<BloodRequestModel> requests = [];
   bool isLoading = false;
+  bool isLoadingMoreRequests = false;
+  bool hasMoreRequests = false;
+  int totalRequests = 0;
   AppError? appError;
   String? get errorMessage => appError?.message;
 
   String divisionFilter = '';
   String districtFilter = '';
   String bloodGroupFilter = '';
+  int _requestsPage = 0;
+  int _requestLoadGeneration = 0;
 
   void _registerSocketListeners() {
     SocketService.instance.on(ApiEndpoints.eventRequestCreated, (data) {
@@ -42,9 +47,8 @@ class RequestProvider extends ChangeNotifier {
       if (data is Map<String, dynamic>) {
         final updated = BloodRequestModel.fromJson(data);
         if (_matchesActiveFilters(updated)) {
-          requests = requests
-              .map((r) => r.id == updated.id ? updated : r)
-              .toList();
+          requests =
+              requests.map((r) => r.id == updated.id ? updated : r).toList();
         } else {
           // No longer matches the active filter (e.g. its district was
           // edited) — drop it from the filtered view instead of leaving a
@@ -100,58 +104,85 @@ class RequestProvider extends ChangeNotifier {
   /// bypasses the active division/district/blood-group filters and merges
   /// the result in, so opening a request from outside the current filter
   /// doesn't get silently dropped by [_matchesActiveFilters].
-  Future<void> ensureLoaded(String id) async {
-    if (requests.any((r) => r.id == id)) return;
+  Future<bool> ensureLoaded(String id) async {
+    if (requests.any((r) => r.id == id)) return true;
+    appError = null;
     try {
       final unfiltered = await _requestService.getRequests();
       final match = unfiltered.where((r) => r.id == id);
       if (match.isNotEmpty) {
         requests = [match.first, ...requests];
         notifyListeners();
+        return true;
       }
-    } catch (_) {
-      // Best-effort — RequestDetailsScreen already handles a not-found
-      // request with a graceful fallback UI.
+      return false;
+    } catch (error) {
+      appError = mapError(error);
+      notifyListeners();
+      return false;
     }
   }
 
   Future<void> loadRequests() async {
+    final generation = ++_requestLoadGeneration;
     isLoading = true;
+    hasMoreRequests = false;
     appError = null;
     notifyListeners();
     try {
-      final results = await _requestService.getRequests(
+      final result = await _requestService.getRequestPage(
+        page: 1,
         division: divisionFilter,
         district: districtFilter,
         bloodGroup: bloodGroupFilter,
       );
-      requests = results.where((r) {
-        // Always enforce every active filter client-side too — some
-        // backends silently ignore query params they don't recognize, so
-        // relying on the server alone can make filters look broken even
-        // though the request succeeded.
-        if (divisionFilter.isNotEmpty &&
-            r.division.trim().toLowerCase() !=
-                divisionFilter.trim().toLowerCase()) {
-          return false;
-        }
-        if (districtFilter.isNotEmpty &&
-            r.district.trim().toLowerCase() !=
-                districtFilter.trim().toLowerCase()) {
-          return false;
-        }
-        if (bloodGroupFilter.isNotEmpty &&
-            r.bloodGroup.trim().toUpperCase() !=
-                bloodGroupFilter.trim().toUpperCase()) {
-          return false;
-        }
-        return true;
-      }).toList();
+      if (generation != _requestLoadGeneration) return;
+      requests = result.items.where(_matchesActiveFilters).toList();
+      _requestsPage = result.page;
+      totalRequests = result.total;
+      hasMoreRequests = result.hasMore;
     } catch (e) {
+      if (generation != _requestLoadGeneration) return;
       appError = mapError(e);
     } finally {
-      isLoading = false;
-      notifyListeners();
+      if (generation == _requestLoadGeneration) {
+        isLoading = false;
+        isLoadingMoreRequests = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadMoreRequests() async {
+    if (isLoading || isLoadingMoreRequests || !hasMoreRequests) return;
+    final generation = _requestLoadGeneration;
+    isLoadingMoreRequests = true;
+    notifyListeners();
+    try {
+      final result = await _requestService.getRequestPage(
+        page: _requestsPage + 1,
+        division: divisionFilter,
+        district: districtFilter,
+        bloodGroup: bloodGroupFilter,
+      );
+      if (generation != _requestLoadGeneration) return;
+      final existingIds = requests.map((request) => request.id).toSet();
+      requests = [
+        ...requests,
+        ...result.items
+            .where(_matchesActiveFilters)
+            .where((request) => existingIds.add(request.id)),
+      ];
+      _requestsPage = result.page;
+      totalRequests = result.total;
+      hasMoreRequests = result.hasMore;
+    } catch (e) {
+      if (generation == _requestLoadGeneration) appError = mapError(e);
+    } finally {
+      if (generation == _requestLoadGeneration) {
+        isLoadingMoreRequests = false;
+        notifyListeners();
+      }
     }
   }
 

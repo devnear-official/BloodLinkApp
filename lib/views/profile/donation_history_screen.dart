@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/date_formatter.dart';
 import '../../core/widgets/error_state_view.dart';
+import '../../core/widgets/responsive_content.dart';
 import '../../models/blood_request_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/request_service.dart';
@@ -64,16 +65,20 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('Donation History')),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _buildBody(),
+      body: ResponsiveContent(
+        maxWidth: 900,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: _buildBody(),
+        ),
       ),
     );
   }
 
   Widget _buildBody() {
+    final colors = Theme.of(context).colorScheme;
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -86,17 +91,17 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
     }
     if (_history.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 100),
+        children: [
+          const SizedBox(height: 100),
           Icon(Icons.volunteer_activism_outlined,
-              size: 56, color: AppColors.textSecondary),
-          SizedBox(height: 12),
+              size: 56, color: colors.onSurfaceVariant),
+          const SizedBox(height: 12),
           Center(
             child: Text(
               "You haven't donated through BloodLink yet.\n"
               "Accepted donations will show up here.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: colors.onSurfaceVariant),
             ),
           ),
         ],
@@ -116,11 +121,11 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
               ),
             ),
             leading: CircleAvatar(
-              backgroundColor: AppColors.primaryLight,
+              backgroundColor: colors.primaryContainer,
               child: Text(
                 request.bloodGroup,
-                style: const TextStyle(
-                  color: AppColors.primaryDark,
+                style: TextStyle(
+                  color: colors.onPrimaryContainer,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
@@ -136,7 +141,8 @@ class _DonationHistoryScreenState extends State<DonationHistoryScreen> {
             trailing: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.statusColor(request.status).withOpacity(0.12),
+                color: AppColors.statusColor(request.status)
+                    .withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(

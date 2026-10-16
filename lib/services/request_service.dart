@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../core/constants/api_endpoints.dart';
 import '../core/network/api_client.dart';
 import '../models/blood_request_model.dart';
+import '../models/page_result.dart';
 
 /// Talks to the `/api/requests/*` routes.
 class RequestService {
@@ -26,6 +27,31 @@ class RequestService {
     return list
         .map((e) => BloodRequestModel.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<PageResult<BloodRequestModel>> getRequestPage({
+    required int page,
+    int limit = 20,
+    String? division,
+    String? district,
+    String? bloodGroup,
+  }) async {
+    final response = await _dio.get(
+      ApiEndpoints.requests,
+      queryParameters: {
+        'page': page,
+        'limit': limit,
+        if (division != null && division.isNotEmpty) 'division': division,
+        if (district != null && district.isNotEmpty) 'district': district,
+        if (bloodGroup != null && bloodGroup.isNotEmpty)
+          'bloodGroup': bloodGroup,
+      },
+    );
+    _ensureOk(response);
+    return PageResult<BloodRequestModel>.fromJson(
+      response.data as Map<String, dynamic>,
+      BloodRequestModel.fromJson,
+    );
   }
 
   Future<BloodRequestModel> createRequest(BloodRequestModel request) async {

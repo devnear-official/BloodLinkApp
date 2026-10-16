@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_strings.dart';
 import '../../core/utils/date_formatter.dart';
 import '../../core/widgets/error_state_view.dart';
+import '../../core/widgets/responsive_content.dart';
 import '../../models/notification_model.dart';
 import '../../providers/notification_provider.dart';
 import '../request/request_details_screen.dart';
@@ -27,15 +29,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   /// Marks [n] as read and, if it points at a specific request, navigates
   /// there — this is the "specific notification click takes you to it"
   /// behavior.
-  void _openNotification(NotificationModel n) {
-    context.read<NotificationProvider>().markAsRead(n.id);
+  Future<void> _openNotification(NotificationModel n) async {
+    final provider = context.read<NotificationProvider>();
+    final markedAsRead = await provider.markAsRead(n.id);
+    if (!mounted) return;
     if (n.relatedRequestId != null && n.relatedRequestId!.isNotEmpty) {
-      Navigator.of(context).push(
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => RequestDetailsScreen(requestId: n.relatedRequestId!),
         ),
       );
     }
+    if (!mounted || markedAsRead) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(provider.errorMessage ?? 'Could not mark as read'),
+      ),
+    );
   }
 
   IconData _iconFor(String type) {
@@ -54,48 +64,70 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<NotificationProvider>();
+    final strings = AppStrings.of(context);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: Text(strings.text('notifications')),
         actions: [
           IconButton(
-            tooltip: 'Send test push',
+            tooltip: 'Add test notification',
             icon: const Icon(Icons.notifications_active_outlined),
             onPressed: () async {
-              final success =
-                  await context.read<NotificationProvider>().sendTestPush();
-              if (!mounted) return;
+              final notifications = context.read<NotificationProvider>();
+              final success = await notifications.sendTestPush();
+              if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    success ? 'Test push sent' : 'Failed to send test push',
+                    success
+                        ? 'Test notification added'
+                        : notifications.errorMessage ??
+                            'Could not add test notification',
                   ),
-                  backgroundColor: success ? AppColors.success : AppColors.error,
+                  backgroundColor:
+                      success ? AppColors.success : AppColors.error,
                 ),
               );
             },
           ),
           if (provider.unreadCount > 0)
             TextButton(
-              onPressed: () =>
-                  context.read<NotificationProvider>().markAllAsRead(),
-              child: const Text(
+              onPressed: () async {
+                final notifications = context.read<NotificationProvider>();
+                final success = await notifications.markAllAsRead();
+                if (!context.mounted || success) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      notifications.errorMessage ??
+                          'Could not mark notifications as read',
+                    ),
+                  ),
+                );
+              },
+              child: Text(
                 'Mark all read',
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
             ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => provider.loadNotifications(),
-        child: _buildBody(provider),
+      body: ResponsiveContent(
+        maxWidth: 900,
+        child: RefreshIndicator(
+          onRefresh: () => provider.loadNotifications(),
+          child: _buildBody(provider),
+        ),
       ),
     );
   }
 
   Widget _buildBody(NotificationProvider provider) {
+    final colors = Theme.of(context).colorScheme;
     if (provider.isLoading && provider.notifications.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -112,12 +144,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
     if (provider.notifications.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 100),
+        children: [
+          const SizedBox(height: 100),
           Icon(Icons.notifications_none,
-              size: 56, color: AppColors.textSecondary),
-          SizedBox(height: 12),
-          Center(child: Text('You\'re all caught up')),
+              size: 56, color: colors.onSurfaceVariant),
+          const SizedBox(height: 12),
+          const Center(child: Text('You\'re all caught up')),
         ],
       );
     }
@@ -128,13 +160,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         final NotificationModel n = provider.notifications[index];
         return ListTile(
           onTap: () => _openNotification(n),
-          tileColor: n.isRead ? null : AppColors.primaryLight.withOpacity(0.3),
+          tileColor:
+              n.isRead ? null : colors.primaryContainer.withValues(alpha: 0.45),
           leading: CircleAvatar(
-            backgroundColor:
-                n.isRead ? AppColors.divider : AppColors.primaryLight,
+            backgroundColor: n.isRead
+                ? colors.surfaceContainerHighest
+                : colors.primaryContainer,
             child: Icon(
               _iconFor(n.type),
-              color: n.isRead ? AppColors.textSecondary : AppColors.primaryDark,
+              color: n.isRead
+                  ? colors.onSurfaceVariant
+                  : colors.onPrimaryContainer,
               size: 20,
             ),
           ),
@@ -144,12 +180,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               fontWeight: n.isRead ? FontWeight.normal : FontWeight.w700,
             ),
           ),
-          subtitle: Text(n.message, maxLines: 2, overflow: TextOverflow.ellipsis),
+          subtitle:
+              Text(n.message, maxLines: 2, overflow: TextOverflow.ellipsis),
           trailing: Text(
             DateFormatter.timeAgo(n.createdAt),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
-              color: AppColors.textSecondary,
+              color: colors.onSurfaceVariant,
             ),
           ),
         );

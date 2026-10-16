@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
-import 'core/constants/app_colors.dart';
 import 'core/network/api_client.dart';
+import 'core/services/push_notification_service.dart';
+import 'core/services/storage_service.dart';
+import 'core/theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/direct_request_provider.dart';
 import 'providers/notification_provider.dart';
 import 'providers/request_provider.dart';
 import 'providers/user_provider.dart';
+import 'providers/favorites_provider.dart';
+import 'providers/settings_provider.dart';
 import 'views/auth/login_screen.dart';
 import 'views/home/home_screen.dart';
 import 'views/splash/splash_screen.dart';
+import 'views/onboarding/onboarding_screen.dart';
+import 'views/notification/notifications_screen.dart';
+import 'views/request/request_details_screen.dart';
 
 /// Global navigator key so the Dio auth interceptor can force a redirect
 /// back to the login screen on a 401 without needing a BuildContext of
@@ -19,8 +27,25 @@ import 'views/splash/splash_screen.dart';
 /// touch widgets.
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await PushNotificationService.initialize(
+    onNotificationOpened: (data) {
+      final navigator = navigatorKey.currentState;
+      if (navigator == null) return;
+      final link = data['link']?.toString() ?? '';
+      final requestId = data['relatedRequestId']?.toString() ??
+          Uri.tryParse(link)?.queryParameters['highlight'];
+      navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => requestId != null && requestId.isNotEmpty
+              ? RequestDetailsScreen(requestId: requestId)
+              : const NotificationsScreen(),
+        ),
+      );
+    },
+  );
 
   // Wire the Dio client's 401 handler to clear the AuthProvider's session
   // and pop back to the login screen, from anywhere in the app.
@@ -48,78 +73,32 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()..restoreSession()),
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => RequestProvider()),
-        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>(
+          create: (_) => NotificationProvider(),
+          update: (_, auth, notifications) {
+            final provider = notifications ?? NotificationProvider();
+            provider.setUserId(auth.currentUser?.id);
+            return provider;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => DirectRequestProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()..load()),
+        ChangeNotifierProvider(create: (_) => FavoritesProvider()..load()),
       ],
-      child: MaterialApp(
-        title: 'BloodLink',
-        debugShowCheckedModeBanner: false,
-        navigatorKey: navigatorKey,
-        theme: _buildTheme(),
-        home: const _AuthGate(),
-      ),
-    );
-  }
-
-  ThemeData _buildTheme() {
-    return ThemeData(
-      useMaterial3: true,
-      scaffoldBackgroundColor: AppColors.background,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primary,
-        primary: AppColors.primary,
-        secondary: AppColors.accent,
-        surface: AppColors.surface,
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: false,
-      ),
-      cardTheme: CardThemeData(
-        color: AppColors.surface,
-        elevation: 1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: AppColors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.divider),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      child: Consumer<SettingsProvider>(
+        builder: (context, settings, _) => MaterialApp(
+          title: 'BloodLink',
+          debugShowCheckedModeBanner: false,
+          navigatorKey: navigatorKey,
+          locale: Locale(settings.languageCode),
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          supportedLocales: const [Locale('en'), Locale('bn')],
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: settings.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          home: const _AuthGate(),
         ),
       ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.primaryLight,
-        labelTextStyle: WidgetStateProperty.all(
-          const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-        ),
-      ),
-      snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
     );
   }
 }
@@ -147,7 +126,15 @@ class _AuthGate extends StatelessWidget {
       case AuthStatus.authenticated:
         return const HomeScreen();
       case AuthStatus.unauthenticated:
-        return const LoginScreen();
+        return FutureBuilder<bool>(
+          future: StorageService.instance.hasCompletedOnboarding(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return const SplashScreen();
+            return snapshot.data!
+                ? const LoginScreen()
+                : const OnboardingScreen();
+          },
+        );
     }
   }
 }

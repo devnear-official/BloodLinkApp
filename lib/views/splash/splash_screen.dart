@@ -54,17 +54,12 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.bloodtype_rounded,
-                    color: AppColors.primary,
-                    size: 56,
+                SizedBox(
+                  width: 128,
+                  height: 128,
+                  child: Image.asset(
+                    'assets/images/bloodlink_logo.png',
+                    semanticLabel: 'BloodLink logo',
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -81,7 +76,7 @@ class _SplashScreenState extends State<SplashScreen>
                 Text(
                   'Every drop counts',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 14,
                   ),
                 ),

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../core/network/socket_service.dart';
 import '../core/services/storage_service.dart';
+import '../core/services/push_notification_service.dart';
 import '../core/utils/error_mapper.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
@@ -47,6 +50,7 @@ class AuthProvider extends ChangeNotifier {
       currentUser = UserModel.fromJson(userJson);
       status = AuthStatus.authenticated;
       SocketService.instance.connect(token);
+      unawaited(PushNotificationService.identify(currentUser!.id));
     } else {
       status = AuthStatus.unauthenticated;
     }
@@ -75,7 +79,7 @@ class AuthProvider extends ChangeNotifier {
     String? district,
     String? subDistrict,
   }) {
-    return _runAuthAction(
+    return _runAccountAction(
       () => _authService.register(
         name: name,
         email: email,
@@ -88,6 +92,33 @@ class AuthProvider extends ChangeNotifier {
       ),
     );
   }
+
+  Future<bool> verifyEmail({
+    required String email,
+    required String code,
+  }) =>
+      _runAccountAction(
+        () => _authService.verifyEmail(email: email, code: code),
+      );
+
+  Future<bool> resendVerification({required String email}) =>
+      _runAccountAction(() => _authService.resendVerification(email: email));
+
+  Future<bool> requestPasswordReset({required String email}) =>
+      _runAccountAction(() => _authService.requestPasswordReset(email: email));
+
+  Future<bool> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+  }) =>
+      _runAccountAction(
+        () => _authService.resetPassword(
+          email: email,
+          code: code,
+          password: password,
+        ),
+      );
 
   Future<bool> signInWithGoogle() async {
     isLoading = true;
@@ -137,6 +168,22 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> _runAccountAction(Future<void> Function() action) async {
+    isLoading = true;
+    appError = null;
+    notifyListeners();
+    try {
+      await action();
+      return true;
+    } catch (e) {
+      appError = mapError(e);
+      return false;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> _persistSession(String token, UserModel user) async {
     _token = token;
     currentUser = user;
@@ -144,6 +191,7 @@ class AuthProvider extends ChangeNotifier {
     await StorageService.instance.saveToken(token);
     await StorageService.instance.saveUserJson(user.toJson());
     SocketService.instance.connect(token);
+    unawaited(PushNotificationService.identify(user.id));
   }
 
   /// Updates the in-memory + cached user after a profile edit, without
@@ -162,6 +210,7 @@ class AuthProvider extends ChangeNotifier {
       // Not signed in via Google — safe to ignore.
     }
     SocketService.instance.disconnect();
+    await PushNotificationService.clearIdentity();
     await StorageService.instance.clearSession();
     _token = null;
     currentUser = null;

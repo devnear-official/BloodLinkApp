@@ -534,7 +534,12 @@
           "Kafrul",
           "Khilkhet",
           "Turag",
-          "Badda"
+          "Badda",
+          "Savar",
+          "Dhamrai",
+          "Keraniganj",
+          "Nawabganj",
+          "Dohar"
         ]
       },
       {
@@ -630,10 +635,7 @@
           "Singiar"
         ]
       },
-      {
-        "district": "Dhaka",
-        "upazilas": ["Savar", "Dhamrai", "Keraniganj", "Nawabganj", "Dohar"]
-      },
+
       {
         "district": "Munshiganj",
         "upazilas": [

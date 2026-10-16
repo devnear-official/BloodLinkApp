@@ -17,7 +17,7 @@ class AuthResult {
 class AuthService {
   final Dio _dio = ApiClient.instance.dio;
 
-  Future<AuthResult> register({
+  Future<void> register({
     required String name,
     required String email,
     required String password,
@@ -27,7 +27,7 @@ class AuthService {
     String? district,
     String? subDistrict,
   }) async {
-    final response = await _dio.post(
+    await _dio.post(
       ApiEndpoints.register,
       data: {
         'name': name,
@@ -40,7 +40,6 @@ class AuthService {
         if (subDistrict != null) 'upazila': subDistrict,
       },
     );
-    return _resultFromResponse(response);
   }
 
   Future<AuthResult> login({
@@ -60,6 +59,35 @@ class AuthService {
       data: {'idToken': idToken},
     );
     return _resultFromResponse(response);
+  }
+
+  Future<void> verifyEmail({
+    required String email,
+    required String code,
+  }) async {
+    await _dio.post(
+      ApiEndpoints.verifyEmail,
+      data: {'email': email, 'code': code},
+    );
+  }
+
+  Future<void> resendVerification({required String email}) async {
+    await _dio.post(ApiEndpoints.resendVerification, data: {'email': email});
+  }
+
+  Future<void> requestPasswordReset({required String email}) async {
+    await _dio.post(ApiEndpoints.forgotPassword, data: {'email': email});
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+  }) async {
+    await _dio.post(
+      ApiEndpoints.resetPassword,
+      data: {'email': email, 'code': code, 'password': password},
+    );
   }
 
   AuthResult _resultFromResponse(Response response) {

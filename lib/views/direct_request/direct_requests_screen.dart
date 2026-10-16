@@ -37,7 +37,8 @@ class _DirectRequestsScreenState extends State<DirectRequestsScreen>
   }
 
   Future<void> _respond(String id, String status) async {
-    final success = await context.read<DirectRequestProvider>().respond(id, status);
+    final success =
+        await context.read<DirectRequestProvider>().respond(id, status);
     if (!mounted) return;
     if (!success) {
       final error = context.read<DirectRequestProvider>().errorMessage;
@@ -67,17 +68,18 @@ class _DirectRequestsScreenState extends State<DirectRequestsScreen>
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<DirectRequestProvider>();
+    final colors = Theme.of(context).colorScheme;
 
     return SafeArea(
       child: Column(
         children: [
           Material(
-            color: AppColors.surface,
+            color: colors.surface,
             child: TabBar(
               controller: _tabController,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
+              labelColor: colors.primary,
+              unselectedLabelColor: colors.onSurfaceVariant,
+              indicatorColor: colors.primary,
               tabs: const [
                 Tab(text: 'Received'),
                 Tab(text: 'Sent'),
@@ -117,6 +119,7 @@ class _DirectRequestsScreenState extends State<DirectRequestsScreen>
     required bool isReceived,
     required String emptyText,
   }) {
+    final colors = Theme.of(context).colorScheme;
     if (provider.isLoading && items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -134,8 +137,7 @@ class _DirectRequestsScreenState extends State<DirectRequestsScreen>
       return ListView(
         children: [
           const SizedBox(height: 100),
-          const Icon(Icons.inbox_outlined,
-              size: 56, color: AppColors.textSecondary),
+          Icon(Icons.inbox_outlined, size: 56, color: colors.onSurfaceVariant),
           const SizedBox(height: 12),
           Center(child: Text(emptyText)),
         ],
@@ -157,11 +159,11 @@ class _DirectRequestsScreenState extends State<DirectRequestsScreen>
                 Row(
                   children: [
                     CircleAvatar(
-                      backgroundColor: AppColors.primaryLight,
+                      backgroundColor: colors.primaryContainer,
                       child: Text(
                         item.bloodGroup,
-                        style: const TextStyle(
-                          color: AppColors.primaryDark,
+                        style: TextStyle(
+                          color: colors.onPrimaryContainer,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
@@ -173,13 +175,15 @@ class _DirectRequestsScreenState extends State<DirectRequestsScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            isReceived ? 'From ${person.name}' : 'To ${person.name}',
+                            isReceived
+                                ? 'From ${person.name}'
+                                : 'To ${person.name}',
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           Text(
                             item.hospitalName,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
+                            style: TextStyle(
+                              color: colors.onSurfaceVariant,
                               fontSize: 13,
                             ),
                           ),
@@ -191,7 +195,7 @@ class _DirectRequestsScreenState extends State<DirectRequestsScreen>
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppColors.statusColor(item.status)
-                            .withOpacity(0.12),
+                            .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -208,8 +212,8 @@ class _DirectRequestsScreenState extends State<DirectRequestsScreen>
                 const SizedBox(height: 10),
                 Text(
                   'Needed by ${DateFormatter.toShortDate(item.requiredDate)} • ${item.contactNumber}',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
                     fontSize: 13,
                   ),
                 ),
@@ -247,7 +251,7 @@ class _DirectRequestsScreenState extends State<DirectRequestsScreen>
                     child: OutlinedButton(
                       onPressed: () => _cancel(item.id),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textSecondary,
+                        foregroundColor: colors.onSurfaceVariant,
                       ),
                       child: const Text('Cancel Request'),
                     ),

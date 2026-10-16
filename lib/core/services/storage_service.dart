@@ -16,6 +16,8 @@ class StorageService {
   static const String _userKey = 'bloodlink_cached_user';
   static const String _onboardingKey = 'bloodlink_onboarding_complete';
   static const String _darkModeKey = 'bloodlink_dark_mode';
+  static const String _favoritesKey = 'bloodlink_favorite_donors';
+  static const String _languageKey = 'bloodlink_language';
 
   SharedPreferences? _prefs;
 
@@ -57,12 +59,48 @@ class StorageService {
   Future<bool> hasCompletedOnboarding() async =>
       (await _prefsInstance).getBool(_onboardingKey) ?? false;
 
-  Future<void> completeOnboarding() async =>
-      (await _prefsInstance).setBool(_onboardingKey, true);
+  Future<void> completeOnboarding() async {
+    await (await _prefsInstance).setBool(_onboardingKey, true);
+  }
 
   Future<bool> getDarkMode() async =>
       (await _prefsInstance).getBool(_darkModeKey) ?? false;
 
-  Future<void> saveDarkMode(bool enabled) async =>
-      (await _prefsInstance).setBool(_darkModeKey, enabled);
+  Future<void> saveDarkMode(bool enabled) async {
+    await (await _prefsInstance).setBool(_darkModeKey, enabled);
+  }
+
+  Future<String> getLanguage() async =>
+      (await _prefsInstance).getString(_languageKey) ?? 'en';
+
+  Future<void> saveLanguage(String languageCode) async {
+    await (await _prefsInstance).setString(_languageKey, languageCode);
+  }
+
+  Future<Set<String>> getFavoriteDonorIds() async =>
+      (await _prefsInstance).getStringList(_favoritesKey)?.toSet() ??
+      <String>{};
+
+  Future<void> saveFavoriteDonorIds(Set<String> ids) async {
+    await (await _prefsInstance).setStringList(_favoritesKey, ids.toList());
+  }
+
+  Future<List<Map<String, dynamic>>?> getCachedJsonList(String key) async {
+    final raw = (await _prefsInstance).getString(key);
+    if (raw == null) return null;
+    final decoded = jsonDecode(raw);
+    if (decoded is! List<dynamic>) {
+      throw const FormatException('Cached value is not a JSON list');
+    }
+    return decoded
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+  }
+
+  Future<void> saveCachedJsonList(
+    String key,
+    List<Map<String, dynamic>> items,
+  ) async {
+    await (await _prefsInstance).setString(key, jsonEncode(items));
+  }
 }

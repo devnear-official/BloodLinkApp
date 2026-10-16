@@ -4,7 +4,7 @@ import Notification from "../models/Notification.ts";
 import User from "../models/User.ts";
 import { verifyToken } from "../middleware/auth.ts";
 import { checkEligibility } from "../utils/eligibility.ts";
-import { sendPushNotification } from "../utils/firebaseAdmin.ts";
+import { sendMobilePushNotification } from "../utils/oneSignal.ts";
 
 const router = express.Router();
 
@@ -101,10 +101,7 @@ router.post("/", verifyToken, async (req: any, res) => {
     const donorUserForPush = await User.findById(donorId);
     if (donorUserForPush) {
       try {
-        await sendPushNotification({
-          pushSubscriptions: donorUserForPush.pushSubscriptions,
-          save: () => donorUserForPush.save(),
-        }, {
+        await sendMobilePushNotification(donorUserForPush._id.toString(), {
           title: 'Blood Link: Direct Request',
           message: `Someone directly requested you for a blood donation!`,
           link: '/profile?tab=received',
@@ -174,14 +171,14 @@ router.put("/:id/status", verifyToken, async (req: any, res) => {
     const requesterUserForPush = await User.findById(request.requester._id.toString());
     if (requesterUserForPush) {
       try {
-        await sendPushNotification({
-          pushSubscriptions: requesterUserForPush.pushSubscriptions,
-          save: () => requesterUserForPush.save(),
-        }, {
+        await sendMobilePushNotification(
+          requesterUserForPush._id.toString(),
+          {
           title: 'Blood Link: Request ' + status,
           message: `Your direct blood request was ${status} by ${(request.donor as any).name}!`,
           link: '/profile?tab=sent',
-        });
+          },
+        );
       } catch (pushError) {
         console.error("Failed to send direct-request update push notification:", pushError);
       }
@@ -236,14 +233,14 @@ router.delete("/:id", verifyToken, async (req: any, res) => {
     const donorToNotifyPush = await User.findById(request.donor.toString());
     if (donorToNotifyPush) {
       try {
-        await sendPushNotification({
-          pushSubscriptions: donorToNotifyPush.pushSubscriptions,
-          save: () => donorToNotifyPush.save(),
-        }, {
+        await sendMobilePushNotification(
+          donorToNotifyPush._id.toString(),
+          {
           title: 'Blood Link: Request Cancelled',
           message: 'A direct blood request sent to you was cancelled.',
           link: '/profile?tab=received',
-        });
+          },
+        );
       } catch (pushError) {
         console.error("Failed to send cancellation push notification:", pushError);
       }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/widgets/error_state_view.dart';
+import '../../core/widgets/responsive_content.dart';
 import '../../models/blood_request_model.dart';
 import '../../models/user_model.dart';
 import '../../providers/user_provider.dart';
@@ -53,7 +54,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen>
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+            child:
+                const Text('Delete', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -73,16 +75,17 @@ class _AdminUsersScreenState extends State<AdminUsersScreen>
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<UserProvider>();
+    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Admin Panel'),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          indicatorColor: Colors.white,
+          labelColor: colors.primary,
+          unselectedLabelColor: colors.onSurfaceVariant,
+          indicatorColor: colors.primary,
           tabs: const [
             Tab(text: 'Users'),
             Tab(text: 'Analytics'),
@@ -92,17 +95,24 @@ class _AdminUsersScreenState extends State<AdminUsersScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          RefreshIndicator(
-            onRefresh: () => provider.loadAllUsers(),
-            child: _buildUsersBody(provider),
+          ResponsiveContent(
+            maxWidth: 1100,
+            child: RefreshIndicator(
+              onRefresh: () => provider.loadAllUsers(),
+              child: _buildUsersBody(provider),
+            ),
           ),
-          const _AnalyticsTab(),
+          const ResponsiveContent(
+            maxWidth: 900,
+            child: _AnalyticsTab(),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildUsersBody(UserProvider provider) {
+    final colors = Theme.of(context).colorScheme;
     if (provider.isLoading && provider.allUsers.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -132,10 +142,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen>
         final user = provider.allUsers[index];
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: AppColors.primaryLight,
+            backgroundColor: colors.primaryContainer,
             child: Text(
               user.bloodGroup ?? user.name.substring(0, 1).toUpperCase(),
-              style: const TextStyle(color: AppColors.primaryDark, fontSize: 12),
+              style: TextStyle(
+                color: colors.onPrimaryContainer,
+                fontSize: 12,
+              ),
             ),
           ),
           title: Text(user.name),
@@ -174,7 +187,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen>
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'delete',
-                child: Text('Delete User', style: TextStyle(color: AppColors.error)),
+                child: Text('Delete User',
+                    style: TextStyle(color: AppColors.error)),
               ),
             ],
           ),
@@ -223,6 +237,7 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
   @override
   Widget build(BuildContext context) {
     final users = context.watch<UserProvider>().allUsers;
+    final colors = Theme.of(context).colorScheme;
 
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
@@ -313,10 +328,10 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
           ),
           const SizedBox(height: 12),
           if (bloodGroupCounts.isEmpty)
-            const Text('No donor blood group data yet.',
-                style: TextStyle(color: AppColors.textSecondary))
+            Text('No donor blood group data yet.',
+                style: TextStyle(color: colors.onSurfaceVariant))
           else
-            _BarList(counts: bloodGroupCounts, color: AppColors.primary),
+            _BarList(counts: bloodGroupCounts, color: colors.primary),
           const SizedBox(height: 24),
           const Text(
             'Requests by Status',
@@ -324,10 +339,10 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
           ),
           const SizedBox(height: 12),
           if (_requests.isEmpty)
-            const Text('No blood requests yet.',
-                style: TextStyle(color: AppColors.textSecondary))
+            Text('No blood requests yet.',
+                style: TextStyle(color: colors.onSurfaceVariant))
           else
-            _BarList(counts: statusCounts, color: AppColors.accent),
+            _BarList(counts: statusCounts, color: colors.secondary),
           const SizedBox(height: 20),
         ],
       ),
@@ -336,13 +351,15 @@ class _AnalyticsTabState extends State<_AnalyticsTab> {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.label, required this.value, required this.icon});
+  const _StatCard(
+      {required this.label, required this.value, required this.icon});
   final String label;
   final String value;
   final IconData icon;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -358,7 +375,10 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               label,
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: TextStyle(
+                fontSize: 12,
+                color: colors.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -378,6 +398,7 @@ class _BarList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final maxCount = counts.values.isEmpty
         ? 1
         : counts.values.reduce((a, b) => a > b ? a : b).clamp(1, 1 << 30);
@@ -395,7 +416,8 @@ class _BarList extends StatelessWidget {
                 width: 90,
                 child: Text(
                   entry.key,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -405,7 +427,7 @@ class _BarList extends StatelessWidget {
                     Container(
                       height: 18,
                       decoration: BoxDecoration(
-                        color: AppColors.divider,
+                        color: colors.outlineVariant,
                         borderRadius: BorderRadius.circular(6),
                       ),
                     ),
@@ -428,7 +450,8 @@ class _BarList extends StatelessWidget {
                 child: Text(
                   '${entry.value}',
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
             ],

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_strings.dart';
+import '../../core/widgets/responsive_content.dart';
 import '../../providers/auth_provider.dart';
+import 'account_recovery_screen.dart';
 import '../home/home_screen.dart';
 import 'register_screen.dart';
 
@@ -71,11 +74,14 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final strings = AppStrings.of(context);
+    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Center(
+        child: ResponsiveContent(
+          maxWidth: 480,
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Form(
@@ -105,15 +111,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: Theme.of(context)
                         .textTheme
                         .bodyMedium
-                        ?.copyWith(color: AppColors.textSecondary),
+                        ?.copyWith(color: colors.onSurfaceVariant),
                   ),
                   const SizedBox(height: 32),
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email_outlined),
+                    decoration: InputDecoration(
+                      labelText: strings.text('email'),
+                      prefixIcon: const Icon(Icons.email_outlined),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
@@ -130,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: strings.text('password'),
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(_obscurePassword
@@ -160,20 +166,20 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Sign In'),
+                        : Text(strings.text('signIn')),
                   ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      Expanded(child: Divider(color: AppColors.divider)),
+                      Expanded(child: Divider(color: colors.outlineVariant)),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Text(
                           'OR',
-                          style: TextStyle(color: AppColors.textSecondary),
+                          style: TextStyle(color: colors.onSurfaceVariant),
                         ),
                       ),
-                      Expanded(child: Divider(color: AppColors.divider)),
+                      Expanded(child: Divider(color: colors.outlineVariant)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -183,6 +189,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     label: const Text('Continue with Google'),
                   ),
                   const SizedBox(height: 24),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AccountRecoveryScreen(
+                            email: _emailController.text.trim(),
+                          ),
+                        ),
+                      );
+                    },
+                    child: Text(strings.text('verifyOrForgot')),
+                  ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -195,7 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           );
                         },
-                        child: const Text('Register'),
+                        child: Text(strings.text('register')),
                       ),
                     ],
                   ),

@@ -2,91 +2,75 @@ import express from "express";
 import Notification from "../models/Notification.ts";
 import User from "../models/User.ts";
 import { verifyToken } from "../middleware/auth.ts";
-import { getPublicKey } from "../utils/webpush.ts";
-import { sendPushNotification } from "../utils/firebaseAdmin.ts";
+import { sendMobilePushNotification } from "../utils/oneSignal.ts";
 
 const router = express.Router();
 
-// Get VAPID public key
-router.get("/vapid-public-key", (req, res) => {
-  const key = getPublicKey();
-  res.json({ publicKey: key });
-});
-
-// Test push notification
 router.post("/test-push", verifyToken, async (req: any, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Send via Firebase
-    if (user.pushSubscriptions && user.pushSubscriptions.length > 0) {
-      await sendPushNotification({
-        pushSubscriptions: user.pushSubscriptions,
-        save: () => user.save()
-      }, {
-        title: "Test Notification",
-        message: "This is a test push notification from BloodLink!",
-        link: "/profile"
+    const notification = await Notification.create({
+      user: user._id,
+      title: "Test notification",
+      message: "BloodLink push notifications are working.",
+      type: "test",
+      link: "/profile",
+    });
+
+    req.app
+      .get("io")
+      ?.to(user._id.toString())
+      .emit("notification:new", notification.toObject());
+
+    void sendMobilePushNotification(user._id.toString(), {
+      title: "Test notification",
+      message: "BloodLink push notifications are working.",
+      link: "/profile",
+    })
+      .catch((pushError) => {
+        console.error("Failed to send test push notification:", pushError);
       });
-    }
 
-    // Also emit via Socket.IO
-    // const io = req.app.get("io");
-    // if (io) {
-    //   io.to(user._id.toString()).emit("notification", {
-    //     _id: "test-" + Date.now(),
-    //     message: "This is a test real-time notification!",
-    //     type: "Test",
-    //     link: "/profile",
-    //     createdAt: new Date(),
-    //     read: false
-    //   });
-    // }
-
-    res.json({ message: "Test notifications initiated (FCM tokens: " + (user.pushSubscriptions?.length || 0) + ")" });
+    res.status(201).json({
+      message: "Test notification created",
+      notification: notification.toObject(),
+    });
   } catch (error: any) {
-    res.status(500).json({ message: "Failed to send test notification", error: error.message });
+    res.status(500).json({
+      message: "Failed to send test push",
+      error: error.message,
+    });
   }
 });
 
-// Subscribe to push notifications
-router.post("/subscribe", verifyToken, async (req: any, res) => {
-  try {
-    const { token } = req.body;
-    if (!token) return res.status(400).json({ message: "Token missing" });
-
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    if (!user.pushSubscriptions) {
-      user.pushSubscriptions = [];
-    }
-
-    if (!user.pushSubscriptions.includes(token)) {
-      user.pushSubscriptions.push(token);
-      await user.save();
-    }
-
-    res.status(201).json({ message: "Subscribed successfully" });
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error });
-  }
-});
-
-// Get user notifications
 router.get("/", verifyToken, async (req: any, res) => {
   try {
-    const notifications = await Notification.find({ user: req.user.id })
-      .sort({ createdAt: -1 })
-      .limit(20);
-    res.json(notifications);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const before = req.query.before ? new Date(String(req.query.before)) : null;
+    if (before && Number.isNaN(before.getTime())) {
+      return res.status(400).json({ message: "Invalid before cursor" });
+    }
+    const filter: Record<string, unknown> = { user: req.user.id };
+    if (before) filter.createdAt = { $lt: before };
+    const notifications = await Notification.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1);
+    const hasMore = notifications.length > limit;
+    const items = hasMore ? notifications.slice(0, limit) : notifications;
+    res.json({
+      items,
+      hasMore,
+      nextCursor: hasMore
+        ? items[items.length - 1]?.createdAt?.toISOString() ?? null
+        : null,
+    });
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
 });
 
-// Mark all notifications as read
 router.put("/read-all", verifyToken, async (req: any, res) => {
   try {
     await Notification.updateMany(
@@ -99,13 +83,12 @@ router.put("/read-all", verifyToken, async (req: any, res) => {
   }
 });
 
-// Mark as read
 router.put("/:id/read", verifyToken, async (req: any, res) => {
   try {
     const notification = await Notification.findOneAndUpdate(
       { _id: req.params.id, user: req.user.id },
       { read: true },
-      { new: true }
+      { new: true },
     );
     if (!notification) {
       return res.status(404).json({ message: "Notification not found" });

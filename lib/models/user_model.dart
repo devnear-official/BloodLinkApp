@@ -15,6 +15,7 @@ class UserModel {
     this.role = 'user',
     this.authProvider = 'local',
     this.photoUrl,
+    this.distanceKm,
   });
 
   final String id;
@@ -30,6 +31,7 @@ class UserModel {
   final String role; // 'user' | 'admin'
   final String authProvider; // 'local' | 'google'
   final String? photoUrl;
+  final double? distanceKm;
 
   bool get isAdmin => role == 'admin';
 
@@ -66,13 +68,13 @@ class UserModel {
               (json['lastDonation'] ?? json['lastDonationDate']).toString(),
             )
           : null,
-      status: (json['status'] ?? (json['isAvailable'] == false
-                  ? 'Unavailable'
-                  : 'Available'))
-              .toString(),
+      status: (json['status'] ??
+              (json['isAvailable'] == false ? 'Unavailable' : 'Available'))
+          .toString(),
       role: role == 'admin' ? 'admin' : 'user',
       authProvider: json['authProvider'] ?? 'local',
       photoUrl: (json['photoUrl'] ?? json['picture'])?.toString(),
+      distanceKm: (json['distanceKm'] as num?)?.toDouble(),
     );
   }
 
@@ -91,8 +93,22 @@ class UserModel {
       'role': role,
       'authProvider': authProvider,
       'photoUrl': photoUrl,
+      'distanceKm': distanceKm,
     };
   }
+
+  Map<String, dynamic> toPublicCacheJson() => {
+        'id': id,
+        'name': name,
+        'bloodGroup': bloodGroup,
+        'division': division,
+        'district': district,
+        'subDistrict': subDistrict,
+        'lastDonation': lastDonation?.toIso8601String(),
+        'status': status,
+        'role': role,
+        'photoUrl': photoUrl,
+      };
 
   UserModel copyWith({
     String? name,
@@ -105,6 +121,7 @@ class UserModel {
     String? status,
     String? role,
     String? photoUrl,
+    double? distanceKm,
   }) {
     return UserModel(
       id: id,
@@ -120,6 +137,7 @@ class UserModel {
       role: role ?? this.role,
       authProvider: authProvider,
       photoUrl: photoUrl ?? this.photoUrl,
+      distanceKm: distanceKm ?? this.distanceKm,
     );
   }
 }

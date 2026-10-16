@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   cupertino_icons: ^1.0.6
 
@@ -28,10 +30,12 @@ dependencies:
   google_sign_in: ^6.2.1
 
   # Utils
-  intl: ^0.19.0
+  intl: 0.20.3
 
   # Geolocation (nearby donor detection)
   geolocator: ^13.0.1
+  onesignal_flutter: ^5.7.0
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:
@@ -45,20 +49,15 @@ flutter:
   uses-material-design: true
   assets:
     - assets/data/locations.json
-    - assets/images/splash_logo.png
+    - assets/images/bloodlink_logo.png
 
-# Config consumed by `dart run flutter_native_splash:create` (see
-# NATIVE_SPLASH_SETUP.md for the one-time command to run after
-# `flutter pub get`). This generates the actual native launch_background /
-# LaunchScreen files under android/ and ios/, which only exist once this
-# lib/ + pubspec.yaml is dropped into a full `flutter create`-scaffolded
-# project.
+# Shared branding for the native launch screen and the in-app session splash.
 flutter_native_splash:
   color: "#E53935"
-  image: assets/images/splash_logo.png
+  image: assets/images/bloodlink_logo.png
   android_12:
     color: "#E53935"
-    image: assets/images/splash_logo.png
+    image: assets/images/bloodlink_logo.png
   android: true
   ios: true
   web: false

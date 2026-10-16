@@ -11,14 +11,19 @@ class DonorCard extends StatelessWidget {
     super.key,
     required this.donor,
     required this.onSendRequest,
+    required this.isFavorite,
+    required this.onToggleFavorite,
   });
 
   final UserModel donor;
   final VoidCallback onSendRequest;
+  final bool isFavorite;
+  final VoidCallback onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
     final eligible = donor.isEligibleToDonate;
+    final colors = Theme.of(context).colorScheme;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -28,14 +33,14 @@ class DonorCard extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 26,
-              backgroundColor: AppColors.primaryLight,
+              backgroundColor: colors.primaryContainer,
               backgroundImage:
                   donor.photoUrl != null ? NetworkImage(donor.photoUrl!) : null,
               child: donor.photoUrl == null
                   ? Text(
                       donor.bloodGroup ?? '?',
-                      style: const TextStyle(
-                        color: AppColors.primaryDark,
+                      style: TextStyle(
+                        color: colors.onPrimaryContainer,
                         fontWeight: FontWeight.bold,
                       ),
                     )
@@ -56,11 +61,23 @@ class DonorCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '${donor.district ?? "—"}, ${donor.division ?? "—"}',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
                       fontSize: 13,
                     ),
                   ),
+                  if (donor.distanceKm != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        '${donor.distanceKm!.toStringAsFixed(1)} km away',
+                        style: TextStyle(
+                          color: colors.secondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -92,9 +109,9 @@ class DonorCard extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
                         'Last donated ${DateFormatter.toShortDate(donor.lastDonation)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: AppColors.textSecondary,
+                          color: colors.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -122,10 +139,18 @@ class DonorCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 IconButton(
+                  tooltip: isFavorite ? 'Remove favorite' : 'Save favorite',
+                  onPressed: onToggleFavorite,
+                  icon: Icon(
+                      isFavorite ? Icons.favorite : Icons.favorite_outline),
+                  color:
+                      isFavorite ? AppColors.primary : colors.onSurfaceVariant,
+                ),
+                IconButton(
                   tooltip: 'Send Direct Request',
                   onPressed: onSendRequest,
                   icon: const Icon(Icons.send_outlined),
-                  color: AppColors.accent,
+                  color: colors.secondary,
                 ),
               ],
             ),

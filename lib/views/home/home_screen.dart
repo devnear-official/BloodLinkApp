@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_strings.dart';
 import '../../core/widgets/error_state_view.dart';
+import '../../core/widgets/responsive_content.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/request_provider.dart';
@@ -32,24 +34,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  late final List<Widget> _tabs;
-
-  final List<String> _titles = const [
-    'Blood Requests',
-    'Search Donors',
-    'Find Nearby',
-    'Direct Requests',
-  ];
-
   @override
   void initState() {
     super.initState();
-    _tabs = [
-      _RequestFeedTab(onSelectTab: _selectTab),
-      const SearchDonorScreen(),
-      const NearbyDonorsScreen(),
-      const DirectRequestsScreen(),
-    ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<NotificationProvider>().loadNotifications();
     });
@@ -67,15 +54,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppStrings.of(context);
+    final colors = Theme.of(context).colorScheme;
+    final isWide = MediaQuery.sizeOf(context).width >= 1000;
+    final titles = [
+      strings.text('bloodRequests'),
+      strings.text('searchDonors'),
+      strings.text('findNearby'),
+      strings.text('directRequests'),
+    ];
     return Scaffold(
-      backgroundColor: AppColors.background,
-      drawer: AppDrawer(
-        currentIndex: _currentIndex,
-        onSelectTab: (index) => setState(() => _currentIndex = index),
-      ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      drawer: isWide
+          ? null
+          : AppDrawer(
+              currentIndex: _currentIndex,
+              onSelectTab: (index) => setState(() => _currentIndex = index),
+            ),
       appBar: AppBar(
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: colors.surface,
+        foregroundColor: colors.onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         titleSpacing: 8,
@@ -96,10 +94,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const Text(
+                  Text(
                     'BloodLink',
                     style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: colors.onSurface,
                       fontSize: 19,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.4,
@@ -108,9 +106,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               )
             : Text(
-                _titles[_currentIndex],
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                titles[_currentIndex],
+                style: TextStyle(
+                  color: colors.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                 ),
@@ -123,8 +121,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 tooltip: 'Notifications',
                 onPressed: _openNotifications,
                 style: IconButton.styleFrom(
-                  backgroundColor: AppColors.surface,
-                  foregroundColor: AppColors.textPrimary,
+                  backgroundColor: colors.surfaceContainerHighest,
+                  foregroundColor: colors.onSurface,
                   fixedSize: const Size(44, 44),
                 ),
                 icon: Badge(
@@ -137,37 +135,121 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: IndexedStack(index: _currentIndex, children: _tabs),
-      bottomNavigationBar: NavigationBar(
-        backgroundColor: AppColors.surface,
-        elevation: 8,
-        indicatorColor: AppColors.primary.withValues(alpha: 0.12),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.bloodtype_outlined),
-            selectedIcon: Icon(Icons.bloodtype),
-            label: 'Requests',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.search_outlined),
-            selectedIcon: Icon(Icons.search),
-            label: 'Donors',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.near_me_outlined),
-            selectedIcon: Icon(Icons.near_me),
-            label: 'Nearby',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.send_outlined),
-            selectedIcon: Icon(Icons.send),
-            label: 'Direct',
+      body: Row(
+        children: [
+          if (isWide) ...[
+            NavigationRail(
+              selectedIndex: _currentIndex,
+              onDestinationSelected: _selectTab,
+              labelType: MediaQuery.sizeOf(context).width >= 1280
+                  ? NavigationRailLabelType.all
+                  : NavigationRailLabelType.selected,
+              leading: Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 24),
+                child: Icon(
+                  Icons.bloodtype_rounded,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 28,
+                ),
+              ),
+              destinations: [
+                NavigationRailDestination(
+                  icon: const Icon(Icons.bloodtype_outlined),
+                  selectedIcon: const Icon(Icons.bloodtype),
+                  label: Text(strings.text('requests')),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.search_outlined),
+                  selectedIcon: const Icon(Icons.search),
+                  label: Text(strings.text('donors')),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.near_me_outlined),
+                  selectedIcon: const Icon(Icons.near_me),
+                  label: Text(strings.text('nearby')),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.send_outlined),
+                  selectedIcon: const Icon(Icons.send),
+                  label: Text(strings.text('direct')),
+                ),
+              ],
+            ),
+            VerticalDivider(
+              width: 1,
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ],
+          Expanded(
+            child: ResponsiveContent(
+              maxWidth: 1080,
+              child: IndexedStack(
+                index: _currentIndex,
+                children: [
+                  _RequestFeedTab(onSelectTab: _selectTab),
+                  const SearchDonorScreen(),
+                  NearbyDonorsScreen(isActive: _currentIndex == 2),
+                  const DirectRequestsScreen(),
+                ],
+              ),
+            ),
           ),
         ],
       ),
+      bottomNavigationBar: isWide
+          ? null
+          : Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: colors.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 24,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: NavigationBar(
+                    height: 68,
+                    backgroundColor: colors.surface,
+                    elevation: 0,
+                    indicatorColor: colors.primary.withValues(alpha: 0.12),
+                    labelBehavior:
+                        NavigationDestinationLabelBehavior.alwaysShow,
+                    selectedIndex: _currentIndex,
+                    onDestinationSelected: (index) =>
+                        setState(() => _currentIndex = index),
+                    destinations: [
+                      NavigationDestination(
+                        icon: const Icon(Icons.bloodtype_outlined),
+                        selectedIcon: const Icon(Icons.bloodtype),
+                        label: strings.text('requests'),
+                      ),
+                      NavigationDestination(
+                        icon: const Icon(Icons.search_outlined),
+                        selectedIcon: const Icon(Icons.search),
+                        label: strings.text('donors'),
+                      ),
+                      NavigationDestination(
+                        icon: const Icon(Icons.near_me_outlined),
+                        selectedIcon: const Icon(Icons.near_me),
+                        label: strings.text('nearby'),
+                      ),
+                      NavigationDestination(
+                        icon: const Icon(Icons.send_outlined),
+                        selectedIcon: const Icon(Icons.send),
+                        label: strings.text('direct'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
     );
   }
 }
@@ -184,13 +266,28 @@ class _RequestFeedTab extends StatefulWidget {
 
 class _RequestFeedTabState extends State<_RequestFeedTab> {
   bool _filtersExpanded = false;
+  final _requestsScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _requestsScrollController.addListener(_loadMoreWhenNearEnd);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RequestProvider>().loadRequests();
     });
+  }
+
+  @override
+  void dispose() {
+    _requestsScrollController.dispose();
+    super.dispose();
+  }
+
+  void _loadMoreWhenNearEnd() {
+    if (!_requestsScrollController.hasClients) return;
+    if (_requestsScrollController.position.extentAfter < 400) {
+      context.read<RequestProvider>().loadMoreRequests();
+    }
   }
 
   static const List<String> _bloodGroups = [
@@ -208,6 +305,7 @@ class _RequestFeedTabState extends State<_RequestFeedTab> {
   Widget build(BuildContext context) {
     final provider = context.watch<RequestProvider>();
     final user = context.watch<AuthProvider>().currentUser;
+    final colors = Theme.of(context).colorScheme;
     final hasLocationFilter = provider.divisionFilter.isNotEmpty ||
         provider.districtFilter.isNotEmpty;
 
@@ -215,6 +313,7 @@ class _RequestFeedTabState extends State<_RequestFeedTab> {
       child: RefreshIndicator(
         onRefresh: () => context.read<RequestProvider>().loadRequests(),
         child: CustomScrollView(
+          controller: _requestsScrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
@@ -225,8 +324,8 @@ class _RequestFeedTabState extends State<_RequestFeedTab> {
                   children: [
                     Text(
                       _greeting(),
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -234,8 +333,8 @@ class _RequestFeedTabState extends State<_RequestFeedTab> {
                     const SizedBox(height: 3),
                     Text(
                       user?.name.split(' ').first ?? 'there',
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: colors.onSurface,
                         fontSize: 27,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.8,
@@ -281,11 +380,11 @@ class _RequestFeedTabState extends State<_RequestFeedTab> {
                     const SizedBox(height: 26),
                     Row(
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: Text(
                             'Community requests',
                             style: TextStyle(
-                              color: AppColors.textPrimary,
+                              color: colors.onSurface,
                               fontSize: 19,
                               fontWeight: FontWeight.w800,
                               letterSpacing: -0.4,
@@ -293,9 +392,11 @@ class _RequestFeedTabState extends State<_RequestFeedTab> {
                           ),
                         ),
                         Text(
-                          '${provider.requests.length} found',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
+                          provider.hasMoreRequests
+                              ? '${provider.requests.length} of ${provider.totalRequests}'
+                              : '${provider.requests.length} found',
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -365,6 +466,20 @@ class _RequestFeedTabState extends State<_RequestFeedTab> {
               ),
             ),
             ..._requestSlivers(provider),
+            if (provider.isLoadingMoreRequests)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              )
+            else if (provider.appError != null && provider.requests.isNotEmpty)
+              SliverToBoxAdapter(
+                child: TextButton(
+                  onPressed: provider.loadMoreRequests,
+                  child: const Text('Could not load more. Tap to retry.'),
+                ),
+              ),
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
@@ -602,8 +717,9 @@ class _QuickActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Material(
-      color: AppColors.surface,
+      color: colors.surface,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
@@ -630,8 +746,8 @@ class _QuickActionCard extends StatelessWidget {
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: colors.onSurface,
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                       ),
@@ -641,8 +757,8 @@ class _QuickActionCard extends StatelessWidget {
                       caption,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
                         fontSize: 10,
                       ),
                     ),
@@ -672,8 +788,9 @@ class _LocationFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Material(
-      color: AppColors.surface,
+      color: colors.surface,
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
@@ -688,10 +805,10 @@ class _LocationFilter extends StatelessWidget {
                 size: 19,
               ),
               const SizedBox(width: 9),
-              const Text(
+              Text(
                 'Location',
                 style: TextStyle(
-                  color: AppColors.textSecondary,
+                  color: colors.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -702,8 +819,8 @@ class _LocationFilter extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: colors.onSurface,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
@@ -711,7 +828,7 @@ class _LocationFilter extends StatelessWidget {
               ),
               Icon(
                 isExpanded ? Icons.expand_less_rounded : Icons.tune_rounded,
-                color: AppColors.textSecondary,
+                color: colors.onSurfaceVariant,
                 size: 19,
               ),
             ],
@@ -727,6 +844,7 @@ class _EmptyRequestsState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(30, 24, 30, 40),
       child: Column(
@@ -745,20 +863,20 @@ class _EmptyRequestsState extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          const Text(
+          Text(
             'All quiet for now',
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: colors.onSurface,
               fontSize: 16,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 5),
-          const Text(
+          Text(
             'No blood requests match these filters. Check back soon or help someone by creating a request.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppColors.textSecondary,
+              color: colors.onSurfaceVariant,
               fontSize: 12,
               height: 1.45,
             ),
@@ -778,18 +896,19 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: ChoiceChip(
         label: Text(label),
         selected: selected,
         onSelected: (_) => onTap(),
-        selectedColor: AppColors.primary,
+        selectedColor: colors.primary,
         labelStyle: TextStyle(
-          color: selected ? Colors.white : AppColors.textPrimary,
+          color: selected ? colors.onPrimary : colors.onSurface,
           fontWeight: FontWeight.w600,
         ),
-        backgroundColor: AppColors.surface,
+        backgroundColor: colors.surface,
       ),
     );
   }

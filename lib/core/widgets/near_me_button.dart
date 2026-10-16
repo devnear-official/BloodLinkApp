@@ -30,7 +30,8 @@ class _NearMeButtonState extends State<NearMeButton> {
   Future<void> _detect() async {
     setState(() => _detecting = true);
     try {
-      final location = await GeolocationService.instance.detectCurrentLocation();
+      final location =
+          await GeolocationService.instance.detectCurrentLocation();
       if (!mounted) return;
       setState(() => _detecting = false);
 
@@ -78,6 +79,14 @@ class _NearMeButtonState extends State<NearMeButton> {
                 Geolocator.openAppSettings();
               },
               child: const Text('Open Settings'),
+            ),
+          if (e.canOpenLocationSettings)
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Geolocator.openLocationSettings();
+              },
+              child: const Text('Enable Location'),
             ),
         ],
       ),

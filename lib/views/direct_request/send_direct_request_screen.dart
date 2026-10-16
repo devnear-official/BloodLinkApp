@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/widgets/responsive_content.dart';
 import '../../models/direct_request_model.dart';
 import '../../models/user_model.dart';
 import '../../providers/direct_request_provider.dart';
@@ -63,10 +64,11 @@ class _SendDirectRequestScreenState extends State<SendDirectRequestScreen> {
           : _messageController.text.trim(),
     );
 
-    final success = await context.read<DirectRequestProvider>().sendDirectRequest(
-          request,
-          toUserId: widget.donor.id,
-        );
+    final success =
+        await context.read<DirectRequestProvider>().sendDirectRequest(
+              request,
+              toUserId: widget.donor.id,
+            );
 
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -92,113 +94,117 @@ class _SendDirectRequestScreenState extends State<SendDirectRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: Text('Request ${widget.donor.name}')),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Card(
-                  color: AppColors.primaryLight,
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: AppColors.primary,
-                          child: Text(
-                            widget.donor.bloodGroup ?? '?',
-                            style: const TextStyle(color: Colors.white),
+        child: ResponsiveContent(
+          maxWidth: 620,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Card(
+                    color: colors.primaryContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: AppColors.primary,
+                            child: Text(
+                              widget.donor.bloodGroup ?? '?',
+                              style: const TextStyle(color: Colors.white),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.donor.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.donor.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                '${widget.donor.district ?? "—"}, ${widget.donor.division ?? "—"}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ],
+                                Text(
+                                  '${widget.donor.district ?? "—"}, ${widget.donor.division ?? "—"}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _hospitalController,
-                  decoration: const InputDecoration(
-                    labelText: 'Hospital Name',
-                    prefixIcon: Icon(Icons.local_hospital_outlined),
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _contactController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Contact Number',
-                    prefixIcon: Icon(Icons.phone_outlined),
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 16),
-                InkWell(
-                  onTap: _pickDate,
-                  child: InputDecorator(
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _hospitalController,
                     decoration: const InputDecoration(
-                      labelText: 'Required Date',
-                      prefixIcon: Icon(Icons.event_outlined),
+                      labelText: 'Hospital Name',
+                      prefixIcon: Icon(Icons.local_hospital_outlined),
                     ),
-                    child: Text(
-                      _requiredDate == null
-                          ? 'Select a date'
-                          : '${_requiredDate!.year}-${_requiredDate!.month.toString().padLeft(2, '0')}-${_requiredDate!.day.toString().padLeft(2, '0')}',
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _contactController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Contact Number',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                    ),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  InkWell(
+                    onTap: _pickDate,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Required Date',
+                        prefixIcon: Icon(Icons.event_outlined),
+                      ),
+                      child: Text(
+                        _requiredDate == null
+                            ? 'Select a date'
+                            : '${_requiredDate!.year}-${_requiredDate!.month.toString().padLeft(2, '0')}-${_requiredDate!.day.toString().padLeft(2, '0')}',
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _messageController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Message (optional)',
-                    alignLabelWithHint: true,
-                    prefixIcon: Icon(Icons.message_outlined),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _messageController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Message (optional)',
+                      alignLabelWithHint: true,
+                      prefixIcon: Icon(Icons.message_outlined),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _submitting ? null : _submit,
-                  child: _submitting
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Send Request'),
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _submitting ? null : _submit,
+                    child: _submitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Send Request'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

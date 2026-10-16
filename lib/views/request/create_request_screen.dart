@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/widgets/responsive_content.dart';
 import '../../models/blood_request_model.dart';
 import '../../providers/request_provider.dart';
 import '../auth/register_screen.dart' show kBloodGroups;
@@ -85,7 +86,8 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
       priority: _priority,
     );
 
-    final success = await context.read<RequestProvider>().createRequest(request);
+    final success =
+        await context.read<RequestProvider>().createRequest(request);
 
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -112,130 +114,134 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('New Blood Request')),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextFormField(
-                  controller: _patientNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Patient Name',
-                    prefixIcon: Icon(Icons.person_outline),
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _bloodGroup,
-                  decoration: const InputDecoration(
-                    labelText: 'Blood Group Needed',
-                    prefixIcon: Icon(Icons.bloodtype_outlined),
-                  ),
-                  items: kBloodGroups
-                      .map((bg) => DropdownMenuItem(value: bg, child: Text(bg)))
-                      .toList(),
-                  onChanged: (value) =>
-                      setState(() => _bloodGroup = value ?? _bloodGroup),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _hospitalController,
-                  decoration: const InputDecoration(
-                    labelText: 'Hospital Name',
-                    prefixIcon: Icon(Icons.local_hospital_outlined),
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _contactController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Contact Number',
-                    prefixIcon: Icon(Icons.phone_outlined),
-                  ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 16),
-                LocationSelector(
-                  division: _division,
-                  district: _district,
-                  subDistrict: _subDistrict,
-                  showSubDistrict: true,
-                  onDivisionChanged: (value) => setState(() {
-                    _division = value;
-                    _district = null;
-                    _subDistrict = null;
-                  }),
-                  onDistrictChanged: (value) => setState(() {
-                    _district = value;
-                    _subDistrict = null;
-                  }),
-                  onSubDistrictChanged: (value) =>
-                      setState(() => _subDistrict = value),
-                ),
-                const SizedBox(height: 16),
-                InkWell(
-                  onTap: _pickDate,
-                  child: InputDecorator(
+        child: ResponsiveContent(
+          maxWidth: 620,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    controller: _patientNameController,
                     decoration: const InputDecoration(
-                      labelText: 'Required Date',
-                      prefixIcon: Icon(Icons.event_outlined),
+                      labelText: 'Patient Name',
+                      prefixIcon: Icon(Icons.person_outline),
                     ),
-                    child: Text(
-                      _requiredDate == null
-                          ? 'Select a date'
-                          : '${_requiredDate!.year}-${_requiredDate!.month.toString().padLeft(2, '0')}-${_requiredDate!.day.toString().padLeft(2, '0')}',
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: _bloodGroup,
+                    decoration: const InputDecoration(
+                      labelText: 'Blood Group Needed',
+                      prefixIcon: Icon(Icons.bloodtype_outlined),
+                    ),
+                    items: kBloodGroups
+                        .map((bg) =>
+                            DropdownMenuItem(value: bg, child: Text(bg)))
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _bloodGroup = value ?? _bloodGroup),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _hospitalController,
+                    decoration: const InputDecoration(
+                      labelText: 'Hospital Name',
+                      prefixIcon: Icon(Icons.local_hospital_outlined),
+                    ),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _contactController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Contact Number',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                    ),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  LocationSelector(
+                    division: _division,
+                    district: _district,
+                    subDistrict: _subDistrict,
+                    showSubDistrict: true,
+                    onDivisionChanged: (value) => setState(() {
+                      _division = value;
+                      _district = null;
+                      _subDistrict = null;
+                    }),
+                    onDistrictChanged: (value) => setState(() {
+                      _district = value;
+                      _subDistrict = null;
+                    }),
+                    onSubDistrictChanged: (value) =>
+                        setState(() => _subDistrict = value),
+                  ),
+                  const SizedBox(height: 16),
+                  InkWell(
+                    onTap: _pickDate,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Required Date',
+                        prefixIcon: Icon(Icons.event_outlined),
+                      ),
+                      child: Text(
+                        _requiredDate == null
+                            ? 'Select a date'
+                            : '${_requiredDate!.year}-${_requiredDate!.month.toString().padLeft(2, '0')}-${_requiredDate!.day.toString().padLeft(2, '0')}',
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _priority,
-                  decoration: const InputDecoration(
-                    labelText: 'Priority',
-                    prefixIcon: Icon(Icons.priority_high),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: _priority,
+                    decoration: const InputDecoration(
+                      labelText: 'Priority',
+                      prefixIcon: Icon(Icons.priority_high),
+                    ),
+                    items: kPriorities
+                        .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _priority = value ?? _priority),
                   ),
-                  items: kPriorities
-                      .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                      .toList(),
-                  onChanged: (value) =>
-                      setState(() => _priority = value ?? _priority),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _messageController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Additional Message (optional)',
-                    alignLabelWithHint: true,
-                    prefixIcon: Icon(Icons.message_outlined),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _messageController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Additional Message (optional)',
+                      alignLabelWithHint: true,
+                      prefixIcon: Icon(Icons.message_outlined),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _submitting ? null : _submit,
-                  child: _submitting
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Post Request'),
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _submitting ? null : _submit,
+                    child: _submitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Post Request'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

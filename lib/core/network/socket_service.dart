@@ -13,6 +13,7 @@ class SocketService {
   static final SocketService instance = SocketService._internal();
 
   io.Socket? _socket;
+  final Map<String, Set<void Function(dynamic)>> _handlers = {};
 
   io.Socket? get socket => _socket;
 
@@ -38,6 +39,11 @@ class SocketService {
           .build(),
     );
 
+    for (final entry in _handlers.entries) {
+      for (final handler in entry.value) {
+        _socket!.on(entry.key, handler);
+      }
+    }
     _socket!.connect();
   }
 
@@ -45,10 +51,12 @@ class SocketService {
   /// a reference to `off` manually via [off] using the same event name if
   /// they need to unregister (e.g. in a Provider's dispose).
   void on(String event, void Function(dynamic data) handler) {
+    _handlers.putIfAbsent(event, () => <void Function(dynamic)>{}).add(handler);
     _socket?.on(event, handler);
   }
 
   void off(String event) {
+    _handlers.remove(event);
     _socket?.off(event);
   }
 

@@ -67,7 +67,7 @@ class _ErrorStateBody extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: AppColors.primaryLight.withOpacity(0.5),
+              color: AppColors.primaryLight.withValues(alpha: 0.5),
               shape: BoxShape.circle,
             ),
             child: Icon(

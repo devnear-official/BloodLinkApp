@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
 import '../../core/services/location_service.dart';
 import '../../models/location_model.dart';
 
@@ -70,9 +69,9 @@ class LocationSelector extends StatelessWidget {
           );
         }
 
-        final divisionNames =
-            snapshot.data!.map((d) => d.division).toList();
-        final districtNames = LocationService.instance.districtNamesFor(division);
+        final divisionNames = snapshot.data!.map((d) => d.division).toList();
+        final districtNames =
+            LocationService.instance.districtNamesFor(division);
         final upazilaNames = showSubDistrict
             ? LocationService.instance.upazilaNamesFor(division, district)
             : const <String>[];
@@ -143,29 +142,29 @@ class LocationSelector extends StatelessWidget {
     final safeValue = (value != null && items.contains(value)) ? value : null;
 
     final dropdownItems = <DropdownMenuItem<String>>[
-      if (allowClear)
-        DropdownMenuItem(value: '', child: Text(allLabel)),
+      if (allowClear) DropdownMenuItem(value: '', child: Text(allLabel)),
       ...items.map((e) => DropdownMenuItem(value: e, child: Text(e))),
     ];
 
     return DropdownButtonFormField<String>(
-      value: allowClear ? (safeValue ?? '') : safeValue,
+      initialValue: allowClear ? (safeValue ?? '') : safeValue,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
         hintText: enabled ? 'Select $label' : 'Select $label above first',
       ),
       items: enabled ? dropdownItems : const [],
-      onChanged: enabled
-          ? (value) => onChanged(value == '' ? null : value)
-          : null,
+      onChanged:
+          enabled ? (value) => onChanged(value == '' ? null : value) : null,
       validator: (!allowClear && requiredFields)
           ? (value) =>
               (value == null || value.isEmpty) ? '$label is required' : null
           : null,
       disabledHint: Text(
         'Select $label above first',
-        style: const TextStyle(color: AppColors.textSecondary),
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       ),
       isExpanded: true,
     );

@@ -4,7 +4,7 @@ import Notification from "../models/Notification.ts";
 import User from "../models/User.ts";
 import { verifyToken } from "../middleware/auth.ts";
 import { checkEligibility } from "../utils/eligibility.ts";
-import { sendPushNotification } from "../utils/firebaseAdmin.ts";
+import { sendMobilePushNotification } from "../utils/oneSignal.ts";
 
 const router = express.Router();
 
@@ -12,17 +12,36 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const filter: Record<string, unknown> = {};
-    for (const key of ["bloodGroup", "district", "status"]) {
+    for (const key of ["bloodGroup", "division", "district", "status"]) {
       const value = req.query[key];
       if (typeof value === "string" && value.length > 0) {
         filter[key] = key === "bloodGroup" ? value.toUpperCase() : value;
       }
     }
-    const requests = await BloodRequest.find(filter)
+    const query = BloodRequest.find(filter)
       .populate("createdBy", "name email phone")
       .populate("acceptedBy", "name phone")
       .populate("donorResponses.donor", "name phone bloodGroup")
       .sort({ createdAt: -1 });
+    if (req.query.page !== undefined) {
+      const page = Math.max(Number.parseInt(String(req.query.page), 10) || 1, 1);
+      const limit = Math.min(
+        Math.max(Number.parseInt(String(req.query.limit), 10) || 20, 1),
+        50,
+      );
+      const [items, total] = await Promise.all([
+        query.clone().skip((page - 1) * limit).limit(limit).lean(),
+        BloodRequest.countDocuments(filter),
+      ]);
+      return res.json({
+        items,
+        page,
+        limit,
+        total,
+        hasMore: page * limit < total,
+      });
+    }
+    const requests = await query;
     res.json(requests);
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
@@ -101,24 +120,17 @@ router.post("/", verifyToken, async (req: any, res) => {
         }
         
         // 3. Send push notifications without allowing delivery errors to undo the request.
-        for (const targetUser of targetUsers) {
-          if (targetUser.pushSubscriptions?.length) {
-            try {
-              await sendPushNotification(
-                {
-                  pushSubscriptions: targetUser.pushSubscriptions,
-                  save: () => targetUser.save(),
-                },
-                {
-                  title: 'Blood Link: New Urgent Request',
-                  message: `${patientName} needs urgent ${bloodGroup} blood at ${hospitalName}, ${upazila}.`,
-                  link: `/request-blood?highlight=${newRequest._id}`,
-                },
-              );
-            } catch (pushError) {
-              console.error("Failed to send blood-request push notification:", pushError);
-            }
-          }
+        try {
+          await sendMobilePushNotification(
+            targetUsers.map((user) => user._id.toString()),
+            {
+              title: "Blood Link: New Urgent Request",
+              message: `${patientName} needs urgent ${bloodGroup} blood at ${hospitalName}, ${upazila}.`,
+              link: `/request-blood?highlight=${newRequest._id}`,
+            },
+          );
+        } catch (pushError) {
+          console.error("Failed to send blood-request push notification:", pushError);
         }
       }
     } catch (notifErr) {
@@ -192,10 +204,7 @@ router.post("/:id/respond", verifyToken, async (req: any, res) => {
     const creatorUserToPush = await User.findById(request.createdBy._id.toString());
     if (creatorUserToPush) {
       try {
-        await sendPushNotification({
-          pushSubscriptions: creatorUserToPush.pushSubscriptions,
-          save: () => creatorUserToPush.save()
-        }, {
+        await sendMobilePushNotification(creatorUserToPush._id.toString(), {
           title: 'Blood Link: Donor Responded',
           message: `${donorUser.name || 'A donor'} has offered to donate blood for ${request.patientName}! review their response.`,
           link: `/request-blood?highlight=${request._id}`
@@ -290,10 +299,7 @@ router.put("/:id/responses/:donorId/status", verifyToken, async (req: any, res) 
     const donorUser = await User.findById(req.params.donorId);
     if (donorUser) {
       try {
-        await sendPushNotification({
-          pushSubscriptions: donorUser.pushSubscriptions,
-          save: () => donorUser.save()
-        }, {
+        await sendMobilePushNotification(donorUser._id.toString(), {
           title: 'Blood Link: Offer ' + status,
           message: `Your offer to donate for ${request.patientName} was ${status.toLowerCase()}.`,
           link: `/request-blood?highlight=${request._id}`
@@ -422,10 +428,7 @@ router.delete("/:id", verifyToken, async (req: any, res) => {
         const donorUserForPush = await User.findById(donorId);
         if (donorUserForPush) {
           try {
-            await sendPushNotification({
-              pushSubscriptions: donorUserForPush.pushSubscriptions,
-              save: () => donorUserForPush.save()
-            }, {
+            await sendMobilePushNotification(donorUserForPush._id.toString(), {
               title: 'Blood Link: Request Cancelled',
               message: `The request for ${request.patientName} was cancelled.`,
               link: `/request-blood?highlight=${request._id}`

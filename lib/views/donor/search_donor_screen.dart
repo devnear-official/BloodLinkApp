@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_strings.dart';
 import '../../core/services/geolocation_service.dart';
 import '../../core/widgets/error_state_view.dart';
 import '../../core/widgets/near_me_button.dart';
 import '../../models/user_model.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/favorites_provider.dart';
 import '../auth/register_screen.dart' show kBloodGroups;
 import '../direct_request/send_direct_request_screen.dart';
 import '../shared/location_selector.dart';
@@ -24,13 +26,29 @@ class SearchDonorScreen extends StatefulWidget {
 
 class _SearchDonorScreenState extends State<SearchDonorScreen> {
   bool _filtersExpanded = false;
+  bool _favoritesOnly = false;
+  final _donorsScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _donorsScrollController.addListener(_loadMoreWhenNearEnd);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<UserProvider>().loadDonors();
     });
+  }
+
+  @override
+  void dispose() {
+    _donorsScrollController.dispose();
+    super.dispose();
+  }
+
+  void _loadMoreWhenNearEnd() {
+    if (!_donorsScrollController.hasClients || _favoritesOnly) return;
+    if (_donorsScrollController.position.extentAfter < 320) {
+      context.read<UserProvider>().loadMoreDonors();
+    }
   }
 
   void _openSendRequest(UserModel donor) {
@@ -56,6 +74,7 @@ class _SearchDonorScreenState extends State<SearchDonorScreen> {
   @override
   Widget build(BuildContext context) {
     final userProvider = context.watch<UserProvider>();
+    final colors = Theme.of(context).colorScheme;
     final hasLocationFilter = userProvider.divisionFilter.isNotEmpty ||
         userProvider.districtFilter.isNotEmpty ||
         userProvider.subDistrictFilter.isNotEmpty;
@@ -71,23 +90,23 @@ class _SearchDonorScreenState extends State<SearchDonorScreen> {
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.only(bottom: 10),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.08),
+                      color: colors.secondary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.near_me_rounded,
-                            size: 16, color: AppColors.accent),
+                        Icon(Icons.near_me_rounded,
+                            size: 16, color: colors.secondary),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Showing donors near ${userProvider.nearMeLabel}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: AppColors.accent,
+                              color: colors.secondary,
                               fontWeight: FontWeight.w600,
                             ),
                             maxLines: 2,
@@ -95,9 +114,10 @@ class _SearchDonorScreenState extends State<SearchDonorScreen> {
                           ),
                         ),
                         InkWell(
-                          onTap: () => context.read<UserProvider>().clearNearMe(),
-                          child: const Icon(Icons.close,
-                              size: 16, color: AppColors.accent),
+                          onTap: () =>
+                              context.read<UserProvider>().clearNearMe(),
+                          child: Icon(Icons.close,
+                              size: 16, color: colors.secondary),
                         ),
                       ],
                     ),
@@ -114,13 +134,13 @@ class _SearchDonorScreenState extends State<SearchDonorScreen> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: colors.surface,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.location_on_outlined,
-                            size: 18, color: AppColors.textSecondary),
+                        Icon(Icons.location_on_outlined,
+                            size: 18, color: colors.onSurfaceVariant),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -139,7 +159,7 @@ class _SearchDonorScreenState extends State<SearchDonorScreen> {
                           _filtersExpanded
                               ? Icons.expand_less
                               : Icons.expand_more,
-                          color: AppColors.textSecondary,
+                          color: colors.onSurfaceVariant,
                         ),
                       ],
                     ),
@@ -195,6 +215,21 @@ class _SearchDonorScreenState extends State<SearchDonorScreen> {
                     ],
                   ),
                 ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilterChip(
+                    avatar: Icon(
+                        _favoritesOnly
+                            ? Icons.favorite
+                            : Icons.favorite_outline,
+                        size: 16),
+                    label: Text(
+                        _favoritesOnly ? 'Saved donors' : 'Show saved donors'),
+                    selected: _favoritesOnly,
+                    onSelected: (selected) =>
+                        setState(() => _favoritesOnly = selected),
+                  ),
+                ),
               ],
             ),
           ),
@@ -210,6 +245,12 @@ class _SearchDonorScreenState extends State<SearchDonorScreen> {
   }
 
   Widget _buildBody(UserProvider userProvider) {
+    final favorites = context.watch<FavoritesProvider>();
+    final strings = AppStrings.of(context);
+    final colors = Theme.of(context).colorScheme;
+    final donors = _favoritesOnly
+        ? userProvider.donors.where((d) => favorites.isFavorite(d.id)).toList()
+        : userProvider.donors;
     if (userProvider.isLoading && userProvider.donors.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -223,24 +264,85 @@ class _SearchDonorScreenState extends State<SearchDonorScreen> {
         ],
       );
     }
-    if (userProvider.donors.isEmpty) {
+    if (donors.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 100),
-          Icon(Icons.people_outline, size: 56, color: AppColors.textSecondary),
-          SizedBox(height: 12),
-          Center(child: Text('No available donors found')),
+        children: [
+          const SizedBox(height: 100),
+          Icon(
+            _favoritesOnly ? Icons.favorite_border : Icons.people_outline,
+            size: 56,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                _favoritesOnly
+                    ? 'No saved donors yet. Tap the heart on a donor to save them here.'
+                    : 'No donors match these filters. Try changing the blood group or location.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
         ],
       );
     }
+    final offlineBannerCount = userProvider.isUsingOfflineCache ? 1 : 0;
+    final showFooter = !_favoritesOnly &&
+        (userProvider.hasMoreDonors ||
+            userProvider.isLoadingMoreDonors ||
+            userProvider.appError != null);
     return ListView.builder(
+      controller: _donorsScrollController,
       padding: const EdgeInsets.only(bottom: 90),
-      itemCount: userProvider.donors.length,
+      itemCount: offlineBannerCount + donors.length + (showFooter ? 1 : 0),
       itemBuilder: (context, index) {
-        final donor = userProvider.donors[index];
+        if (offlineBannerCount == 1 && index == 0) {
+          return Container(
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              strings.text('offlineMode'),
+              style: TextStyle(
+                fontSize: 12,
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          );
+        }
+        final donorIndex = index - offlineBannerCount;
+        if (donorIndex == donors.length) {
+          if (userProvider.isLoadingMoreDonors) {
+            return const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (userProvider.appError != null) {
+            return TextButton(
+              onPressed: userProvider.loadMoreDonors,
+              child: const Text('Could not load more donors. Tap to retry.'),
+            );
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _loadMoreWhenNearEnd();
+          });
+          return const SizedBox(height: 1);
+        }
+        final donor = donors[donorIndex];
         return DonorCard(
           donor: donor,
           onSendRequest: () => _openSendRequest(donor),
+          isFavorite: favorites.isFavorite(donor.id),
+          onToggleFavorite: () => favorites.toggle(donor.id),
         );
       },
     );
@@ -260,18 +362,19 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: ChoiceChip(
         label: Text(label),
         selected: selected,
         onSelected: (_) => onTap(),
-        selectedColor: AppColors.primary,
+        selectedColor: colors.primary,
         labelStyle: TextStyle(
-          color: selected ? Colors.white : AppColors.textPrimary,
+          color: selected ? colors.onPrimary : colors.onSurface,
           fontWeight: FontWeight.w600,
         ),
-        backgroundColor: AppColors.surface,
+        backgroundColor: colors.surface,
       ),
     );
   }

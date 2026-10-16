@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/localization/app_strings.dart';
 import '../../core/services/geolocation_service.dart';
 import '../../core/utils/error_mapper.dart';
 import '../../core/widgets/error_state_view.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/favorites_provider.dart';
 import '../../services/user_service.dart';
 import '../direct_request/send_direct_request_screen.dart';
 import '../shared/location_selector.dart';
@@ -23,7 +24,9 @@ import '../donor/widgets/donor_card.dart';
 /// [UserProvider]'s shared filters, so switching to this tab never
 /// silently changes what the "Donors" tab's manual search shows.
 class NearbyDonorsScreen extends StatefulWidget {
-  const NearbyDonorsScreen({super.key});
+  const NearbyDonorsScreen({super.key, required this.isActive});
+
+  final bool isActive;
 
   @override
   State<NearbyDonorsScreen> createState() => _NearbyDonorsScreenState();
@@ -40,13 +43,31 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
   LocationPermissionException? _permissionError;
   AppError? _appError;
   bool _needsManualArea = false;
+  bool _usingGpsRadius = false;
+  bool _usingAreaFallback = false;
+  double _radiusKm = 25;
   String? _manualDivision;
   String? _manualDistrict;
+  bool _hasStartedInitialDetection = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _detectAndLoad());
+    _startDetectionWhenActive();
+  }
+
+  @override
+  void didUpdateWidget(covariant NearbyDonorsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) _startDetectionWhenActive();
+  }
+
+  void _startDetectionWhenActive() {
+    if (!widget.isActive || _hasStartedInitialDetection) return;
+    _hasStartedInitialDetection = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.isActive) _detectAndLoad();
+    });
   }
 
   Future<void> _detectAndLoad() async {
@@ -94,15 +115,34 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
     }
   }
 
-  Future<void> _loadDonors(DetectedLocation location) async {
+  Future<void> _loadDonors(DetectedLocation? location) async {
     try {
       final currentUserId = context.read<AuthProvider>().currentUser?.id;
-      final district = _needsManualArea ? _manualDistrict : location.district;
-      final users = await _userService.getUsers(
-        division: _needsManualArea ? _manualDivision : location.division,
-        district: district,
-        subDistrict: _needsManualArea ? null : location.subDistrict,
-      );
+      final division = _needsManualArea ? _manualDivision : location?.division;
+      final district = _needsManualArea ? _manualDistrict : location?.district;
+      final subDistrict = _needsManualArea ? null : location?.subDistrict;
+      final canSearchByGps = location != null &&
+          (!_needsManualArea ||
+              (_manualDivision == null && _manualDistrict == null));
+      var usedGpsRadius = false;
+      var users = <UserModel>[];
+      if (canSearchByGps) {
+        users = await _userService.getNearbyUsers(
+          latitude: location.latitude,
+          longitude: location.longitude,
+          radiusKm: _radiusKm,
+        );
+        usedGpsRadius = users.isNotEmpty;
+      }
+      if (users.isEmpty) {
+        users = await _userService.getUsers(
+          division: division,
+          district: district,
+          subDistrict: subDistrict,
+          availableOnly: true,
+        );
+      }
+      final usingAreaFallback = canSearchByGps && !usedGpsRadius;
       if (!mounted) return;
       setState(() {
         _donors = users.where((u) {
@@ -110,22 +150,25 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
           if (u.id == currentUserId) return false;
           // Enforce client-side too, same reasoning as everywhere else in
           // the app — some backends ignore query params they don't know.
-          final filterDistrict =
-              _needsManualArea ? _manualDistrict : location.district;
-          final filterDivision =
-              _needsManualArea ? _manualDivision : location.division;
-          if (filterDistrict != null &&
-              (u.district ?? '').trim().toLowerCase() !=
-                  filterDistrict.trim().toLowerCase()) {
+          if (!usedGpsRadius &&
+              district != null &&
+              !_sameArea(u.district, district)) {
             return false;
           }
-          if (filterDivision != null &&
-              (u.division ?? '').trim().toLowerCase() !=
-                  filterDivision.trim().toLowerCase()) {
+          if (!usedGpsRadius &&
+              division != null &&
+              !_sameArea(u.division, division)) {
+            return false;
+          }
+          if (!usedGpsRadius &&
+              subDistrict != null &&
+              !_sameArea(u.subDistrict, subDistrict)) {
             return false;
           }
           return true;
         }).toList();
+        _usingGpsRadius = usedGpsRadius;
+        _usingAreaFallback = usingAreaFallback;
         _status = _NearbyStatus.loaded;
       });
     } catch (e) {
@@ -135,6 +178,19 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
         _status = _NearbyStatus.error;
       });
     }
+  }
+
+  bool _sameArea(String? actual, String expected) =>
+      (actual ?? '').trim().toLowerCase() == expected.trim().toLowerCase();
+
+  void _searchByArea() {
+    setState(() {
+      _needsManualArea = true;
+      _manualDivision = null;
+      _manualDistrict = null;
+      _status = _NearbyStatus.loadingDonors;
+    });
+    _loadDonors(_location);
   }
 
   void _openSendRequest(UserModel donor) {
@@ -154,17 +210,21 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
   }
 
   Widget _buildBody() {
+    final favorites = context.watch<FavoritesProvider>();
+    final strings = AppStrings.of(context);
+    final colors = Theme.of(context).colorScheme;
+
     switch (_status) {
       case _NearbyStatus.detecting:
         return ListView(
-          children: const [
-            SizedBox(height: 120),
-            Center(child: CircularProgressIndicator()),
-            SizedBox(height: 16),
+          children: [
+            const SizedBox(height: 120),
+            const Center(child: CircularProgressIndicator()),
+            const SizedBox(height: 16),
             Center(
               child: Text(
-                'Detecting your location…',
-                style: TextStyle(color: AppColors.textSecondary),
+                strings.text('detectingLocation'),
+                style: TextStyle(color: colors.onSurfaceVariant),
               ),
             ),
           ],
@@ -177,13 +237,13 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
             if (_needsManualArea) ...[
               _manualAreaPicker(),
               if (_manualDistrict == null && _manualDivision == null)
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 4, 24, 0),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
                   child: Text(
                     'Showing available donors across all areas. Choose your area to narrow the results.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: colors.onSurfaceVariant,
                       fontSize: 12,
                     ),
                   ),
@@ -197,7 +257,8 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
       case _NearbyStatus.permissionError:
         return ListView(
           children: [
-            const SizedBox(height: 40),
+            _locationBanner(),
+            const SizedBox(height: 24),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Column(
@@ -206,45 +267,65 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight.withValues(alpha: 0.5),
+                      color: colors.primaryContainer.withValues(alpha: 0.5),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.location_off_outlined,
-                        size: 34, color: AppColors.primary),
+                    child: Icon(Icons.location_off_outlined,
+                        size: 34, color: colors.primary),
                   ),
                   const SizedBox(height: 18),
-                  const Text(
-                    'Location Needed',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+                  Text(
+                    strings.text('locationNeeded'),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 17,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     _permissionError?.message ??
                         'Location permission is required.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        color: AppColors.textSecondary,
+                    style: TextStyle(
+                        color: colors.onSurfaceVariant,
                         fontSize: 13,
                         height: 1.4),
                   ),
                   const SizedBox(height: 20),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    runSpacing: 8,
                     children: [
                       OutlinedButton(
                         onPressed: _detectAndLoad,
-                        child: const Text('Try Again'),
+                        child: Text(strings.text('tryAgain')),
                       ),
                       if (_permissionError?.canOpenSettings ?? false) ...[
-                        const SizedBox(width: 12),
                         ElevatedButton(
                           onPressed: () => Geolocator.openAppSettings(),
                           child: const Text('Open Settings'),
                         ),
                       ],
+                      if (_permissionError?.canOpenLocationSettings ??
+                          false) ...[
+                        ElevatedButton(
+                          onPressed: () => Geolocator.openLocationSettings(),
+                          child: const Text('Enable Location'),
+                        ),
+                      ],
                     ],
                   ),
                 ],
+              ),
+            ),
+            _manualAreaPicker(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+              child: OutlinedButton.icon(
+                onPressed: _searchByArea,
+                icon: const Icon(Icons.search_rounded),
+                label: const Text('Find donors by area instead'),
               ),
             ),
           ],
@@ -253,9 +334,19 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
       case _NearbyStatus.error:
         return ListView(
           children: [
+            _locationBanner(),
             ErrorStateViewFromAppError(
               appError: _appError!,
               onRetry: _detectAndLoad,
+            ),
+            _manualAreaPicker(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+              child: OutlinedButton.icon(
+                onPressed: _searchByArea,
+                icon: const Icon(Icons.search_rounded),
+                label: const Text('Find donors by area instead'),
+              ),
             ),
           ],
         );
@@ -267,18 +358,18 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
               _locationBanner(),
               if (_needsManualArea) _manualAreaPicker(),
               const SizedBox(height: 60),
-              const Icon(Icons.people_outline,
-                  size: 56, color: AppColors.textSecondary),
+              Icon(Icons.people_outline,
+                  size: 56, color: colors.onSurfaceVariant),
               const SizedBox(height: 12),
-              const Center(
-                child: Text('No available donors found near you'),
+              Center(
+                child: Text(strings.text('noNearbyDonors')),
               ),
               const SizedBox(height: 4),
-              const Center(
+              Center(
                 child: Text(
-                  'Try the Donors tab to search a wider area',
+                  strings.text('widerSearch'),
                   style:
-                      TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
                 ),
               ),
             ],
@@ -294,6 +385,8 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
             return DonorCard(
               donor: donor,
               onSendRequest: () => _openSendRequest(donor),
+              isFavorite: favorites.isFavorite(donor.id),
+              onToggleFavorite: () => favorites.toggle(donor.id),
             );
           },
         );
@@ -301,44 +394,136 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
   }
 
   Widget _locationBanner() {
+    final strings = AppStrings.of(context);
+    final colors = Theme.of(context).colorScheme;
     final label = [
       _location?.subDistrict,
       _location?.district,
       _location?.division,
     ].where((s) => s != null && s.isNotEmpty).join(', ');
 
+    final locationLabel = _needsManualArea
+        ? label.isNotEmpty
+            ? 'Confirm your search area'
+            : 'Choose an area to find donors'
+        : _status == _NearbyStatus.permissionError ||
+                _status == _NearbyStatus.error
+            ? 'Location could not be detected'
+            : label.isEmpty
+                ? 'Your current location'
+                : 'Near $label';
+
+    final locationDescription = _needsManualArea
+        ? _location?.displayName ?? 'GPS unavailable · select an area below'
+        : _status == _NearbyStatus.permissionError
+            ? _permissionError?.message ??
+                'Check location access and try again.'
+            : _status == _NearbyStatus.error
+                ? _appError?.message ?? 'Check your connection and try again.'
+                : _usingGpsRadius
+                    ? strings
+                        .text('donorsWithinRadius')
+                        .replaceAll('{radius}', _radiusKm.toInt().toString())
+                    : _usingAreaFallback
+                        ? 'No GPS-shared donors within ${_radiusKm.toInt()} km · showing area results'
+                        : 'Available donors near your area';
+
     return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
+        gradient: LinearGradient(
+          colors: [
+            colors.secondary.withValues(alpha: 0.12),
+            colors.secondary.withValues(alpha: 0.04),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.secondary.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.near_me_rounded, size: 16, color: AppColors.accent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _needsManualArea
-                  ? 'Location needs confirmation · ${_location?.displayName ?? 'GPS detected'}'
-                  : label.isEmpty
-                      ? 'Your current location'
-                      : 'Near $label',
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.accent,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: colors.secondary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(
+              Icons.location_searching_rounded,
+              color: colors.secondary,
             ),
           ),
-          InkWell(
-            onTap: _detectAndLoad,
-            child: const Icon(Icons.refresh_rounded,
-                size: 18, color: AppColors.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  locationLabel,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: colors.onSurface,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  locationDescription,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    color: colors.onSurfaceVariant,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              PopupMenuButton<double>(
+                tooltip: 'Search radius',
+                onSelected: (radius) {
+                  setState(() {
+                    _radiusKm = radius;
+                    _status = _NearbyStatus.loadingDonors;
+                  });
+                  _loadDonors(_location);
+                },
+                itemBuilder: (context) => [5, 10, 25, 50, 100]
+                    .map(
+                      (radius) => PopupMenuItem<double>(
+                        value: radius.toDouble(),
+                        child: Text('$radius km radius'),
+                      ),
+                    )
+                    .toList(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    '${_radiusKm.toInt()} km',
+                    style: TextStyle(
+                      color: colors.secondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              IconButton.filledTonal(
+                tooltip: AppStrings.of(context).text('refreshLocation'),
+                onPressed: _detectAndLoad,
+                icon: const Icon(Icons.my_location_rounded, size: 19),
+              ),
+            ],
           ),
         ],
       ),
@@ -346,24 +531,27 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
   }
 
   Widget _manualAreaPicker() {
+    final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Choose your area',
+          Text(
+            AppStrings.of(context).text('chooseArea'),
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: colors.onSurface,
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'We found your GPS position but could not identify its district. Select your area to narrow nearby donors.',
+          Text(
+            _location == null
+                ? 'Location is unavailable right now. Select your area to find available donors.'
+                : 'We found your position but could not identify its district. Select your area to narrow the results.',
             style: TextStyle(
-              color: AppColors.textSecondary,
+              color: colors.onSurfaceVariant,
               fontSize: 12,
               height: 1.4,
             ),
@@ -376,18 +564,20 @@ class _NearbyDonorsScreenState extends State<NearbyDonorsScreen> {
             allowClear: true,
             onDivisionChanged: (value) {
               setState(() {
+                _needsManualArea = true;
                 _manualDivision = value;
                 _manualDistrict = null;
                 _status = _NearbyStatus.loadingDonors;
               });
-              _loadDonors(_location!);
+              _loadDonors(_location);
             },
             onDistrictChanged: (value) {
               setState(() {
+                _needsManualArea = true;
                 _manualDistrict = value;
                 _status = _NearbyStatus.loadingDonors;
               });
-              _loadDonors(_location!);
+              _loadDonors(_location);
             },
           ),
         ],

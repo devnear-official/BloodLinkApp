@@ -22,6 +22,10 @@ class ApiEndpoints {
   // Auth
   // ---------------------------------------------------------------------
   static const String googleAuth = '$apiBase/auth/google';
+  static const String verifyEmail = '$apiBase/auth/verify-email';
+  static const String resendVerification = '$apiBase/auth/resend-verification';
+  static const String forgotPassword = '$apiBase/auth/forgot-password';
+  static const String resetPassword = '$apiBase/auth/reset-password';
   static const String register = '$apiBase/auth/register';
   static const String login = '$apiBase/auth/login';
 
@@ -30,6 +34,8 @@ class ApiEndpoints {
   // ---------------------------------------------------------------------
   static const String me = '$apiBase/users/me';
   static const String users = '$apiBase/users';
+  static const String nearbyUsers = '$apiBase/users/nearby';
+  static const String myProfilePhoto = '$apiBase/users/me/photo';
   static String userStatus(String id) => '$apiBase/users/$id/status';
   static String userRole(String id) => '$apiBase/users/$id/role';
   static String userById(String id) => '$apiBase/users/$id';
@@ -56,10 +62,7 @@ class ApiEndpoints {
   // ---------------------------------------------------------------------
   // Notifications
   // ---------------------------------------------------------------------
-  static const String vapidPublicKey =
-      '$apiBase/notifications/vapid-public-key';
   static const String testPush = '$apiBase/notifications/test-push';
-  static const String subscribePush = '$apiBase/notifications/subscribe';
   static const String notifications = '$apiBase/notifications';
   static const String notificationsReadAll = '$apiBase/notifications/read-all';
   static String notificationRead(String id) =>

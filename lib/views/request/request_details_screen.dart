@@ -6,6 +6,8 @@ import '../../core/utils/date_formatter.dart';
 import '../../models/blood_request_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/request_provider.dart';
+import '../../core/widgets/error_state_view.dart';
+import '../../core/widgets/responsive_content.dart';
 import 'create_request_screen.dart' show kPriorities;
 
 /// Shows full details of a single blood request, including the list of
@@ -22,13 +24,24 @@ class RequestDetailsScreen extends StatefulWidget {
 }
 
 class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
+  bool _loadingRequest = true;
+  bool _requestNotFound = false;
+
   @override
   void initState() {
     super.initState();
     // Handles the case where this screen is opened directly (e.g. from a
     // notification) before the request feed has ever been loaded.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<RequestProvider>().ensureLoaded(widget.requestId);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadRequest());
+  }
+
+  Future<void> _loadRequest() async {
+    final found =
+        await context.read<RequestProvider>().ensureLoaded(widget.requestId);
+    if (!mounted) return;
+    setState(() {
+      _loadingRequest = false;
+      _requestNotFound = !found;
     });
   }
 
@@ -36,12 +49,46 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
   Widget build(BuildContext context) {
     final requestProvider = context.watch<RequestProvider>();
     final currentUser = context.watch<AuthProvider>().currentUser;
+    final colors = Theme.of(context).colorScheme;
     final requestId = widget.requestId;
 
     final found = requestProvider.requests.any((r) => r.id == requestId);
-    if (!found && requestProvider.isLoading) {
+    if (!found && _loadingRequest) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (!found && requestProvider.appError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Request Details')),
+        body: SafeArea(
+          child: ErrorStateViewFromAppError(
+            appError: requestProvider.appError!,
+            onRetry: () {
+              setState(() {
+                _loadingRequest = true;
+                _requestNotFound = false;
+              });
+              _loadRequest();
+            },
+          ),
+        ),
+      );
+    }
+    if (!found && _requestNotFound) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Request Details')),
+        body: const SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Text(
+                'This blood request is no longer available.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
       );
     }
 
@@ -72,36 +119,34 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
         currentUser.isEligibleToDonate;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Request Details'),
         actions: [
           if (isOwner)
             PopupMenuButton<String>(
               onSelected: (value) async {
+                final provider = context.read<RequestProvider>();
                 if (value == 'delete') {
                   final confirmed = await _confirmDelete(context);
-                  if (confirmed == true) {
-                    final ok = await context
-                        .read<RequestProvider>()
-                        .deleteRequest(request.id);
-                    if (context.mounted && ok) Navigator.of(context).pop();
-                  }
+                  if (!mounted || confirmed != true) return;
+                  final ok = await provider.deleteRequest(request.id);
+                  if (mounted && ok) Navigator.of(this.context).pop();
                 } else if (value == 'complete') {
-                  context.read<RequestProvider>().updateStatus(
-                        request.id,
-                        'Completed',
-                      );
+                  provider.updateStatus(
+                    request.id,
+                    'Completed',
+                  );
                 } else if (value == 'cancel') {
-                  context.read<RequestProvider>().updateStatus(
-                        request.id,
-                        'Cancelled',
-                      );
+                  provider.updateStatus(
+                    request.id,
+                    'Cancelled',
+                  );
                 } else if (kPriorities.contains(value)) {
-                  context.read<RequestProvider>().updatePriority(
-                        request.id,
-                        value,
-                      );
+                  provider.updatePriority(
+                    request.id,
+                    value,
+                  );
                 }
               },
               itemBuilder: (context) => [
@@ -130,78 +175,83 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            _buildHeader(request),
-            const SizedBox(height: 20),
-            _buildInfoCard(request),
-            const SizedBox(height: 20),
-            if (canRespond) _buildRespondButton(context, request),
-            if (alreadyResponded && !isOwner)
-              const _InfoBanner(
-                icon: Icons.check_circle_outline,
-                text: "You've already responded to this request.",
-                color: AppColors.accent,
+        child: ResponsiveContent(
+          maxWidth: 900,
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              _buildHeader(request),
+              const SizedBox(height: 20),
+              _buildInfoCard(request),
+              const SizedBox(height: 20),
+              if (canRespond) _buildRespondButton(context, request),
+              if (alreadyResponded && !isOwner)
+                _InfoBanner(
+                  icon: Icons.check_circle_outline,
+                  text: "You've already responded to this request.",
+                  color: colors.secondary,
+                ),
+              if (currentUser != null &&
+                  !isOwner &&
+                  !currentUser.isEligibleToDonate &&
+                  request.isOpen)
+                _InfoBanner(
+                  icon: Icons.access_time,
+                  text: currentUser.lastDonation == null
+                      ? "You're currently marked unavailable to donate."
+                      : "You'll be eligible to donate again in ${currentUser.daysUntilEligible} days.",
+                  color: AppColors.warning,
+                ),
+              const SizedBox(height: 24),
+              if (isOwner &&
+                  !request.isOpen &&
+                  request.responses.any((r) => r.status == 'Accepted'))
+                _InfoBanner(
+                  icon: Icons.lock_outline,
+                  text:
+                      'This request is locked — a donor has already been accepted, '
+                      'and any other pending offers were automatically declined.',
+                  color: colors.secondary,
+                ),
+              Text(
+                'Donor Responses (${request.responses.length})',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
-            if (currentUser != null &&
-                !isOwner &&
-                !currentUser.isEligibleToDonate &&
-                request.isOpen)
-              _InfoBanner(
-                icon: Icons.access_time,
-                text: currentUser.lastDonation == null
-                    ? "You're currently marked unavailable to donate."
-                    : "You'll be eligible to donate again in ${currentUser.daysUntilEligible} days.",
-                color: AppColors.warning,
-              ),
-            const SizedBox(height: 24),
-            if (isOwner &&
-                !request.isOpen &&
-                request.responses.any((r) => r.status == 'Accepted'))
-              const _InfoBanner(
-                icon: Icons.lock_outline,
-                text:
-                    'This request is locked — a donor has already been accepted, '
-                    'and any other pending offers were automatically declined.',
-                color: AppColors.accent,
-              ),
-            Text(
-              'Donor Responses (${request.responses.length})',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (request.responses.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Center(
-                  child: Text(
-                    'No donors have responded yet',
-                    style: TextStyle(color: AppColors.textSecondary),
+              const SizedBox(height: 12),
+              if (request.responses.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: Text(
+                      'No donors have responded yet',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                )
+              else
+                ...request.responses.map(
+                  (response) => _ResponseTile(
+                    response: response,
+                    isOwner: isOwner,
+                    requestLocked: !request.isOpen,
+                    onAccept: () =>
+                        context.read<RequestProvider>().acceptDonorResponse(
+                              requestId: request.id,
+                              donorId: response.donor.id,
+                            ),
+                    onReject: () =>
+                        context.read<RequestProvider>().setResponseStatus(
+                              requestId: request.id,
+                              donorId: response.donor.id,
+                              status: 'Rejected',
+                            ),
                   ),
                 ),
-              )
-            else
-              ...request.responses.map(
-                (response) => _ResponseTile(
-                  response: response,
-                  isOwner: isOwner,
-                  requestLocked: !request.isOpen,
-                  onAccept: () => context.read<RequestProvider>().acceptDonorResponse(
-                        requestId: request.id,
-                        donorId: response.donor.id,
-                      ),
-                  onReject: () => context.read<RequestProvider>().setResponseStatus(
-                        requestId: request.id,
-                        donorId: response.donor.id,
-                        status: 'Rejected',
-                      ),
-                ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -220,7 +270,8 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+            child:
+                const Text('Delete', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -281,14 +332,32 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _InfoRow(icon: Icons.local_hospital_outlined, label: 'Hospital', value: request.hospitalName),
-            _InfoRow(icon: Icons.phone_outlined, label: 'Contact', value: request.contactNumber),
-            _InfoRow(icon: Icons.location_on_outlined, label: 'Location', value: '${request.district}, ${request.division}'),
-            _InfoRow(icon: Icons.event_outlined, label: 'Needed by', value: DateFormatter.toShortDate(request.requiredDate)),
+            _InfoRow(
+                icon: Icons.local_hospital_outlined,
+                label: 'Hospital',
+                value: request.hospitalName),
+            _InfoRow(
+                icon: Icons.phone_outlined,
+                label: 'Contact',
+                value: request.contactNumber),
+            _InfoRow(
+                icon: Icons.location_on_outlined,
+                label: 'Location',
+                value: '${request.district}, ${request.division}'),
+            _InfoRow(
+                icon: Icons.event_outlined,
+                label: 'Needed by',
+                value: DateFormatter.toShortDate(request.requiredDate)),
             if (request.createdBy != null)
-              _InfoRow(icon: Icons.person_outline, label: 'Posted by', value: request.createdBy!.name),
+              _InfoRow(
+                  icon: Icons.person_outline,
+                  label: 'Posted by',
+                  value: request.createdBy!.name),
             if (request.message != null && request.message!.isNotEmpty)
-              _InfoRow(icon: Icons.message_outlined, label: 'Message', value: request.message!),
+              _InfoRow(
+                  icon: Icons.message_outlined,
+                  label: 'Message',
+                  value: request.message!),
           ],
         ),
       ),
@@ -302,14 +371,16 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
         icon: const Icon(Icons.volunteer_activism),
         label: const Text("I Can Donate"),
         onPressed: () async {
-          final success =
-              await context.read<RequestProvider>().respondToRequest(request.id);
+          final provider = context.read<RequestProvider>();
+          final success = await provider.respondToRequest(request.id);
           if (!context.mounted) return;
-          final error = context.read<RequestProvider>().errorMessage;
+          final error = provider.errorMessage;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                success ? 'Response sent to the requester' : (error ?? 'Failed to respond'),
+                success
+                    ? 'Response sent to the requester'
+                    : (error ?? 'Failed to respond'),
               ),
               backgroundColor: success ? AppColors.success : AppColors.error,
             ),
@@ -321,23 +392,26 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.label, required this.value});
+  const _InfoRow(
+      {required this.icon, required this.label, required this.value});
   final IconData icon;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: AppColors.textSecondary),
+          Icon(icon, size: 18, color: colors.onSurfaceVariant),
           const SizedBox(width: 10),
           SizedBox(
             width: 90,
-            child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            child: Text(label,
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)),
           ),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
         ],
@@ -356,19 +430,21 @@ class _StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+        style:
+            TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }
 }
 
 class _InfoBanner extends StatelessWidget {
-  const _InfoBanner({required this.icon, required this.text, required this.color});
+  const _InfoBanner(
+      {required this.icon, required this.text, required this.color});
   final IconData icon;
   final String text;
   final Color color;
@@ -379,14 +455,15 @@ class _InfoBanner extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.only(top: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(width: 10),
-          Expanded(child: Text(text, style: TextStyle(color: color, fontSize: 13))),
+          Expanded(
+              child: Text(text, style: TextStyle(color: color, fontSize: 13))),
         ],
       ),
     );
@@ -410,6 +487,7 @@ class _ResponseTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
@@ -420,10 +498,11 @@ class _ResponseTile extends StatelessWidget {
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: AppColors.primaryLight,
+                  backgroundColor: colors.primaryContainer,
                   child: Text(
                     response.donor.bloodGroup ?? '?',
-                    style: const TextStyle(color: AppColors.primaryDark, fontSize: 12),
+                    style: TextStyle(
+                        color: colors.onPrimaryContainer, fontSize: 12),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -431,10 +510,12 @@ class _ResponseTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(response.donor.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(response.donor.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
                       Text(
                         DateFormatter.timeAgo(response.respondedAt),
-                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                        style: TextStyle(
+                            fontSize: 11, color: colors.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -452,7 +533,8 @@ class _ResponseTile extends StatelessWidget {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: onReject,
-                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.error),
                       child: const Text('Reject'),
                     ),
                   ),

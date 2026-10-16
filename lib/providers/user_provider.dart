@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../core/services/storage_service.dart';
 import '../core/utils/error_mapper.dart';
 import '../models/user_model.dart';
 import '../services/user_service.dart';
@@ -16,6 +18,9 @@ class UserProvider extends ChangeNotifier {
   List<UserModel> donors = [];
   List<UserModel> allUsers = []; // used by the admin panel
   bool isLoading = false;
+  bool isLoadingMoreDonors = false;
+  bool hasMoreDonors = false;
+  bool isUsingOfflineCache = false;
   AppError? appError;
   String? get errorMessage => appError?.message;
 
@@ -28,24 +33,19 @@ class UserProvider extends ChangeNotifier {
   /// than manual dropdown selection, so the UI can show a "near you"
   /// banner with the detected place name and a way to clear it.
   String? nearMeLabel;
+  int _donorPage = 0;
+  int _donorLoadGeneration = 0;
 
-  Future<void> loadDonors() async {
-    isLoading = true;
-    appError = null;
-    notifyListeners();
-    try {
-      final users = await _userService.getUsers(
-        division: divisionFilter,
-        district: districtFilter,
-        subDistrict: subDistrictFilter,
-        bloodGroup: bloodGroupFilter,
-      );
-      donors = users.where((u) {
+  String get _donorCacheKey => [
+        'bloodlink_donor_cache',
+        divisionFilter,
+        districtFilter,
+        subDistrictFilter,
+        bloodGroupFilter,
+      ].join(':');
+
+  List<UserModel> _filterDonors(Iterable<UserModel> users) => users.where((u) {
         if (u.status != 'Available') return false;
-        // Always enforce every active filter client-side too — some
-        // backends silently ignore query params they don't recognize, so
-        // relying on the server alone can make filters look broken even
-        // though the request succeeded.
         if (divisionFilter.isNotEmpty &&
             (u.division ?? '').trim().toLowerCase() !=
                 divisionFilter.trim().toLowerCase()) {
@@ -68,11 +68,98 @@ class UserProvider extends ChangeNotifier {
         }
         return true;
       }).toList();
+
+  Future<void> loadDonors() async {
+    final generation = ++_donorLoadGeneration;
+    final cacheKey = _donorCacheKey;
+    isLoading = true;
+    hasMoreDonors = false;
+    isUsingOfflineCache = false;
+    appError = null;
+    notifyListeners();
+    try {
+      final result = await _userService.getDonorPage(
+        page: 1,
+        division: divisionFilter,
+        district: districtFilter,
+        subDistrict: subDistrictFilter,
+        bloodGroup: bloodGroupFilter,
+      );
+      if (generation != _donorLoadGeneration) return;
+      donors = _filterDonors(result.items);
+      _donorPage = result.page;
+      hasMoreDonors = result.hasMore;
+      try {
+        await StorageService.instance.saveCachedJsonList(
+          cacheKey,
+          donors.map((donor) => donor.toPublicCacheJson()).toList(),
+        );
+      } catch (cacheError) {
+        debugPrint('Could not cache donor results: $cacheError');
+      }
     } catch (e) {
-      appError = mapError(e);
+      if (generation != _donorLoadGeneration) return;
+      try {
+        final cached =
+            await StorageService.instance.getCachedJsonList(cacheKey);
+        if (cached != null) {
+          donors = _filterDonors(cached.map(UserModel.fromJson));
+          hasMoreDonors = false;
+          isUsingOfflineCache = true;
+          appError = null;
+        } else {
+          appError = mapError(e);
+        }
+      } catch (cacheError) {
+        appError = mapError(e);
+        debugPrint('Could not read cached donor results: $cacheError');
+      }
     } finally {
-      isLoading = false;
-      notifyListeners();
+      if (generation == _donorLoadGeneration) {
+        isLoading = false;
+        isLoadingMoreDonors = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadMoreDonors() async {
+    if (isLoading || isLoadingMoreDonors || !hasMoreDonors) return;
+    final generation = _donorLoadGeneration;
+    isLoadingMoreDonors = true;
+    notifyListeners();
+    try {
+      final result = await _userService.getDonorPage(
+        page: _donorPage + 1,
+        division: divisionFilter,
+        district: districtFilter,
+        subDistrict: subDistrictFilter,
+        bloodGroup: bloodGroupFilter,
+      );
+      if (generation != _donorLoadGeneration) return;
+      final existingIds = donors.map((donor) => donor.id).toSet();
+      donors = [
+        ...donors,
+        ..._filterDonors(result.items)
+            .where((donor) => existingIds.add(donor.id)),
+      ];
+      _donorPage = result.page;
+      hasMoreDonors = result.hasMore;
+      try {
+        await StorageService.instance.saveCachedJsonList(
+          _donorCacheKey,
+          donors.map((donor) => donor.toPublicCacheJson()).toList(),
+        );
+      } catch (cacheError) {
+        debugPrint('Could not update donor cache: $cacheError');
+      }
+    } catch (e) {
+      if (generation == _donorLoadGeneration) appError = mapError(e);
+    } finally {
+      if (generation == _donorLoadGeneration) {
+        isLoadingMoreDonors = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -141,6 +228,17 @@ class UserProvider extends ChangeNotifier {
     } catch (e) {
       appError = mapError(e);
       isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<UserModel?> uploadProfilePhoto(XFile photo) async {
+    appError = null;
+    try {
+      return await _userService.uploadProfilePhoto(photo);
+    } catch (e) {
+      appError = mapError(e);
       notifyListeners();
       return null;
     }

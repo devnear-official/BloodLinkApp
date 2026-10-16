@@ -11,7 +11,10 @@ class NotificationService {
   Future<List<NotificationModel>> getNotifications() async {
     final response = await _dio.get(ApiEndpoints.notifications);
     _ensureOk(response);
-    final list = response.data as List<dynamic>;
+    final data = response.data;
+    final list = data is List<dynamic>
+        ? data
+        : (data as Map<String, dynamic>)['items'] as List<dynamic>;
     return list
         .map((e) => NotificationModel.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -27,27 +30,13 @@ class NotificationService {
     _ensureOk(response);
   }
 
-  Future<String?> getVapidPublicKey() async {
-    final response = await _dio.get(ApiEndpoints.vapidPublicKey);
-    _ensureOk(response);
-    final data = response.data;
-    if (data is Map<String, dynamic>) {
-      return (data['publicKey'] ?? data['key']) as String?;
-    }
-    return data?.toString();
-  }
-
-  Future<void> subscribePush(Map<String, dynamic> subscription) async {
-    final response = await _dio.post(
-      ApiEndpoints.subscribePush,
-      data: subscription,
-    );
-    _ensureOk(response);
-  }
-
-  Future<void> sendTestPush() async {
+  Future<NotificationModel> sendTestPush() async {
     final response = await _dio.post(ApiEndpoints.testPush);
     _ensureOk(response);
+    final data = response.data as Map<String, dynamic>;
+    return NotificationModel.fromJson(
+      data['notification'] as Map<String, dynamic>,
+    );
   }
 
   void _ensureOk(Response response) {

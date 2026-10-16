@@ -14,6 +14,7 @@ class RequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final priorityColor = AppColors.priorityColor(request.priority);
+    final colors = Theme.of(context).colorScheme;
     final location = [
       request.subDistrict,
       request.district,
@@ -21,12 +22,12 @@ class RequestCard extends StatelessWidget {
     ].where((part) => part != null && part.trim().isNotEmpty).join(', ');
 
     return Card(
-      color: AppColors.surface,
+      color: colors.surface,
       elevation: 0,
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: Color(0xFFEDEEF1)),
+        side: BorderSide(color: colors.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -67,8 +68,8 @@ class RequestCard extends StatelessWidget {
                             request.patientName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
+                            style: TextStyle(
+                              color: colors.onSurface,
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
                             ),
@@ -78,8 +79,8 @@ class RequestCard extends StatelessWidget {
                             request.hospitalName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
+                            style: TextStyle(
+                              color: colors.onSurfaceVariant,
                               fontSize: 12,
                             ),
                           ),
@@ -96,14 +97,14 @@ class RequestCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 15),
-              const Divider(height: 1, color: Color(0xFFF0F1F3)),
+              Divider(height: 1, color: colors.outlineVariant),
               const SizedBox(height: 13),
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.location_on_outlined,
                     size: 16,
-                    color: AppColors.textSecondary,
+                    color: colors.onSurfaceVariant,
                   ),
                   const SizedBox(width: 5),
                   Expanded(
@@ -111,24 +112,24 @@ class RequestCard extends StatelessWidget {
                       location.isEmpty ? 'Location not provided' : location,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Icon(
+                  Icon(
                     Icons.schedule_rounded,
                     size: 15,
-                    color: AppColors.textSecondary,
+                    color: colors.onSurfaceVariant,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     DateFormatter.toShortDate(request.requiredDate),
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -147,17 +148,17 @@ class RequestCard extends StatelessWidget {
                   const Spacer(),
                   Text(
                     '${request.responses.length} donor${request.responses.length == 1 ? '' : 's'} responded',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(width: 5),
-                  const Icon(
+                  Icon(
                     Icons.arrow_forward_rounded,
                     size: 16,
-                    color: AppColors.textSecondary,
+                    color: colors.onSurfaceVariant,
                   ),
                 ],
               ),
